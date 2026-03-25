@@ -133,21 +133,18 @@ seed:
 # RAILWAY DEPLOY RECIPES
 # ============================================================================
 
-# Deploy via railway-deploy declarative tool (requires: pip install -e ../railway-deploy)
-deploy-config ENV='production' PROJECT='':
+# Deploy via railway-deploy declarative tool
+# Usage: just deploy-config <env> <project-id>
+# Example: just deploy-config production 90ee1aad-e902-49e1-8956-5d53d902cf54
+deploy-config deploy_env project_id:
     #!/usr/bin/env bash
     set -euo pipefail
-    command -v railway-deploy >/dev/null 2>&1 || python3 -c "import railway_deploy" 2>/dev/null || {
-        echo "❌ railway-deploy not installed."
-        echo "   Run: pip install -e ../railway-deploy"
-        exit 1
-    }
-    [ -n "{{PROJECT}}" ] || { echo "❌ PROJECT is required: just deploy-config ENV=production PROJECT=<railway-project-id>"; exit 1; }
-    [ -f ".env.{{ENV}}" ] || { echo "⚠️  .env.{{ENV}} not found — copy .env.production.example and fill in values"; exit 1; }
-    CMD="railway-deploy"
-    command -v railway-deploy >/dev/null 2>&1 || CMD="python3 ../railway-deploy/railway.py"
-    echo "🚀 Deploying to Railway (env: {{ENV}}, project: {{PROJECT}})..."
-    $CMD --project {{PROJECT}} --env {{ENV}} --config inbounce.deploy.yml
+    [ -f ".env.{{deploy_env}}" ] || { echo "⚠️  .env.{{deploy_env}} not found — copy .env.production.example and fill in values"; exit 1; }
+    echo "🚀 Deploying to Railway (env: {{deploy_env}}, project: {{project_id}})..."
+    PYENV_VERSION=railway-deploy-3.13 railway-deploy \
+        --project {{project_id}} \
+        --env {{deploy_env}} \
+        --config inbounce.deploy.yml
 
 # Deploy to Railway (requires: railway CLI authenticated + project linked)
 deploy MESSAGE='deploy':
