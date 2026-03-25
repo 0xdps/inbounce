@@ -21,21 +21,86 @@ function CopyButton({ text, className = '' }) {
   );
 }
 
-function EmbedSnippet({ apiKey }) {
+const TYPE_PLACEHOLDER = {
+  string:  f => `'your ${f}'`,
+  email:   _f => `'user@example.com'`,
+  url:     _f => `'https://example.com'`,
+  number:  _f => `42`,
+  boolean: _f => `true`,
+  date:    _f => `'2024-01-15'`,
+};
+
+function inputType(type) {
+  if (type === 'email')   return 'email';
+  if (type === 'url')     return 'url';
+  if (type === 'number')  return 'number';
+  if (type === 'boolean') return 'checkbox';
+  if (type === 'date')    return 'date';
+  return 'text';
+}
+
+function EmbedSnippet({ apiKey, fields = [] }) {
+  const [mode, setMode] = useState('fetch');
   const url = `${window.location.origin}/s/${apiKey}`;
-  const snippet = `await fetch('${url}', {
+
+  const bodyFields = fields.length > 0
+    ? fields.map(f => {
+        const ph = (TYPE_PLACEHOLDER[f.type] ?? TYPE_PLACEHOLDER.string)(f.name);
+        return `    ${f.name}: ${ph},${f.required ? '' : '  // optional'}`;
+      }).join('\n')
+    : '    // define schema fields in the Schema tab';
+
+  const fetchSnippet = `await fetch('${url}', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ /* your fields here */ }),
+  body: JSON.stringify({
+${bodyFields}
+  }),
 });`;
+
+  const formInputs = fields.length > 0
+    ? fields.map(f => {
+        const type = inputType(f.type);
+        const req  = f.required ? ' required' : '';
+        if (type === 'checkbox')
+          return `  <label>\n    <input type="checkbox" name="${f.name}"${req} />\n    ${f.name}\n  </label>`;
+        return `  <input type="${type}" name="${f.name}" placeholder="${f.name}"${req} />`;
+      }).join('\n')
+    : '  <!-- define schema fields in the Schema tab -->';
+
+  const formSnippet = `<form action="${url}" method="POST">
+${formInputs}
+
+  <!-- honeypot: leave empty -->
+  <input type="text" name="_hp" style="display:none" tabindex="-1" autocomplete="off" />
+
+  <button type="submit">Submit</button>
+</form>`;
+
+  const active = mode === 'fetch' ? fetchSnippet : formSnippet;
 
   return (
     <div className="bg-overlay border border-border rounded-lg p-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-text-secondary text-xs font-medium">Embed snippet</span>
-        <CopyButton text={snippet} />
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-text-secondary text-xs font-medium">Embed snippet</span>
+          <div className="flex items-center gap-0.5 bg-surface border border-border rounded p-0.5">
+            {['fetch', 'html'].map(m => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`px-2 py-0.5 rounded text-xs font-mono transition-colors ${
+                  mode === m ? 'bg-overlay text-text-primary' : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                {m === 'fetch' ? 'JS fetch' : 'HTML form'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <CopyButton text={active} />
       </div>
-      <pre className="text-text-secondary text-xs font-mono leading-relaxed whitespace-pre-wrap overflow-x-auto">{snippet}</pre>
+      <pre className="text-text-secondary text-xs font-mono leading-relaxed whitespace-pre-wrap overflow-x-auto">{active}</pre>
     </div>
   );
 }
@@ -56,10 +121,17 @@ export default function AppDetail() {
   const [editDesc, setEditDesc] = useState('');
   const [editOrigins, setEditOrigins] = useState('');
   const [saving, setSaving] = useState(false);
+  const [schema, setSchema] = useState([]);
 
   useEffect(() => {
-    api.getApp(id)
-      .then((a) => { setApp(a); setEditName(a.name); setEditDesc(a.description || ''); setEditOrigins((a.allowed_origins || []).join(', ')); })
+    Promise.all([api.getApp(id), api.getSchema(id)])
+      .then(([a, fields]) => {
+        setApp(a);
+        setSchema(fields);
+        setEditName(a.name);
+        setEditDesc(a.description || '');
+        setEditOrigins((a.allowed_origins || []).join(', '));
+      })
       .catch(() => navigate('/apps'))
       .finally(() => setLoading(false));
   }, [id]);
@@ -215,7 +287,7 @@ export default function AppDetail() {
             </div>
 
             {/* Embed snippet */}
-            <EmbedSnippet apiKey={app.api_key} />
+            <EmbedSnippet apiKey={app.api_key} fields={schema} />
 
             {/* Danger zone */}
             <div className="bg-elevated border border-danger/20 rounded-lg p-5">
