@@ -96,11 +96,13 @@ const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? '/api/waitlist';
     }
 
     .nav-logo {
+      display: flex; align-items: center; gap: 9px;
       font-family: 'JetBrains Mono', monospace;
       font-size: 14px; font-weight: 500;
       color: var(--text); letter-spacing: -0.02em;
     }
     .nav-logo span { color: var(--v-light); }
+    .nav-logo svg { flex-shrink: 0; }
 
     .nav-right { display: flex; align-items: center; gap: 16px; }
 
@@ -472,7 +474,7 @@ const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? '/api/waitlist';
 
     .foot-inner { display: flex; align-items: center; justify-content: space-between; }
 
-    .foot-logo { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+    .foot-logo { display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
     .foot-logo span { color: var(--v-light); }
 
     .foot-right { font-size: 12px; color: var(--muted); }
@@ -502,7 +504,21 @@ const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? '/api/waitlist';
   <nav>
     <div class="container">
       <div class="nav-inner">
-        <a href="/" class="nav-logo">in<span>bounce</span></a>
+        <a href="/" class="nav-logo">
+          <svg width="26" height="26" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="nav-g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#9333ea"/>
+                <stop offset="100%" stop-color="#5b21b6"/>
+              </linearGradient>
+            </defs>
+            <rect width="48" height="48" rx="12" fill="url(#nav-g)"/>
+            <text x="15" y="34" font-family="Georgia, serif" font-size="26" font-style="italic" font-weight="700" fill="white">i</text>
+            <line x1="27" y1="20" x2="38" y2="20" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+            <line x1="27" y1="29" x2="35" y2="29" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+          </svg>
+          in<span>bounce</span>
+        </a>
         <div class="nav-right">
           <div class="alpha-pill">
             <div class="alpha-dot"></div>
@@ -746,9 +762,9 @@ const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? '/api/waitlist';
         </div>
 
         <div class="feat reveal-d3">
-          <div class="feat-icon">🏠</div>
-          <h3>Self-hosted</h3>
-          <p>Deploy to Railway in a single command. Your data lives on your infrastructure, under your control — no vendor access to your users' data.</p>
+          <div class="feat-icon">🛡️</div>
+          <h3>Deduplication</h3>
+          <p>Pass an idempotency key with any submission and Inbounce silently ignores exact duplicates — great for retrying forms without flooding your inbox.</p>
         </div>
 
       </div>
@@ -803,7 +819,22 @@ const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? '/api/waitlist';
   <footer>
     <div class="container">
       <div class="foot-inner">
-        <div class="foot-logo">in<span>bounce</span> · closed alpha</div>
+        <div class="foot-logo">
+          <svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="foot-g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#9333ea"/>
+                <stop offset="100%" stop-color="#5b21b6"/>
+              </linearGradient>
+            </defs>
+            <rect width="48" height="48" rx="12" fill="url(#foot-g)"/>
+            <text x="15" y="34" font-family="Georgia, serif" font-size="26" font-style="italic" font-weight="700" fill="white">i</text>
+            <line x1="27" y1="20" x2="38" y2="20" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+            <line x1="27" y1="29" x2="35" y2="29" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+          </svg>
+          </svg>
+          in<span>bounce</span> · closed alpha
+        </div>
         <div class="foot-right">Built for developers who own their data</div>
       </div>
     </div>
