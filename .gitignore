@@ -9,6 +9,8 @@ services/frontend/dist/
 # Environment
 .env
 .env.local
+.env.production
+.env.staging
 
 # Misc
 .DS_Store

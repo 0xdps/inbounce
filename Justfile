@@ -129,6 +129,48 @@ dev-fe-local:
 seed:
     cd services/backend && node scripts/seed.js
 
+# ============================================================================
+# RAILWAY DEPLOY RECIPES
+# ============================================================================
+
+# Deploy via railway-deploy declarative tool (requires: pip install -e ../railway-deploy)
+deploy-config ENV='production' PROJECT='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v railway-deploy >/dev/null 2>&1 || python3 -c "import railway_deploy" 2>/dev/null || {
+        echo "❌ railway-deploy not installed."
+        echo "   Run: pip install -e ../railway-deploy"
+        exit 1
+    }
+    [ -n "{{PROJECT}}" ] || { echo "❌ PROJECT is required: just deploy-config ENV=production PROJECT=<railway-project-id>"; exit 1; }
+    [ -f ".env.{{ENV}}" ] || { echo "⚠️  .env.{{ENV}} not found — copy .env.production.example and fill in values"; exit 1; }
+    CMD="railway-deploy"
+    command -v railway-deploy >/dev/null 2>&1 || CMD="python3 ../railway-deploy/railway.py"
+    echo "🚀 Deploying to Railway (env: {{ENV}}, project: {{PROJECT}})..."
+    $CMD --project {{PROJECT}} --env {{ENV}} --config inbounce.deploy.yml
+
+# Deploy to Railway (requires: railway CLI authenticated + project linked)
+deploy MESSAGE='deploy':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v railway >/dev/null 2>&1 || { echo "❌ railway CLI not installed. Run: npm i -g @railway/cli"; exit 1; }
+    railway whoami --json >/dev/null 2>&1 || { echo "❌ Not authenticated. Run: railway login"; exit 1; }
+    echo "🚀 Deploying to Railway..."
+    railway up --detach -m "{{MESSAGE}}"
+    echo "✅ Deploy triggered. Watch logs with: just railway-logs"
+
+# Stream live Railway logs
+railway-logs:
+    railway logs --lines 200
+
+# Show Railway service status
+railway-status:
+    railway status --json
+
+# Open Railway dashboard in browser
+railway-open:
+    railway open
+
 # Stop all dev containers
 down:
     #!/usr/bin/env bash

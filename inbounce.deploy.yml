@@ -1,0 +1,73 @@
+# =============================================================================
+# inbounce.deploy.yml — Railway Deploy Config
+# =============================================================================
+# Usage:
+#   railway-deploy --project <RAILWAY_PROJECT_ID> --env production --config inbounce.deploy.yml
+#   railway-deploy --project <RAILWAY_PROJECT_ID> --env staging    --config inbounce.deploy.yml
+#
+# Single-service redeploy:
+#   railway-deploy --project <ID> --env production --config inbounce.deploy.yml --service app --skip-infra
+#
+# Environment file expected: .env.production  or  .env.staging
+# =============================================================================
+
+project:
+  name: Inbounce
+  prefix: inbounce
+
+# ── Infrastructure ─────────────────────────────────────────────────────────────
+# Inbounce uses sqlite-hub (external service) — no managed DB to provision.
+infra: []
+
+# ── Application services ────────────────────────────────────────────────────────
+services:
+  - name: app
+    # railway_name will be auto-derived as: inbounce-{env}-app
+    # e.g. inbounce-production-app / inbounce-staging-app
+    repo: 0xdps/inbounce
+    branch: trunk
+    dockerfile: Dockerfile
+    vars:
+      static:
+        NODE_ENV: production
+        LOG_LEVEL: info
+        BACKEND_PORT: "3000"
+
+      # Keys pulled from .env.<environment> (only non-empty values forwarded)
+      common:
+        - ADMIN_KEY
+        - SESSION_SECRET
+        - SQLITE_HUB_URL
+        - SQLITE_HUB_DB
+        - SQLITE_HUB_SERVICE_SECRET
+
+# ── Auto-generated secrets ───────────────────────────────────────────────────
+# Generated once on first deploy and written to the env file.
+# DO NOT rotate after first deploy – that would invalidate all active sessions.
+secrets:
+  - key: ADMIN_KEY
+    bytes: 24
+  - key: SESSION_SECRET
+    bytes: 32
+
+# ── Hard-required variables ───────────────────────────────────────────────────
+# Deploy aborts immediately if any of these are missing or empty.
+required_vars:
+  - ADMIN_KEY
+  - SESSION_SECRET
+  - SQLITE_HUB_URL
+  - SQLITE_HUB_DB
+  - SQLITE_HUB_SERVICE_SECRET
+
+# ── Soft-required variables ───────────────────────────────────────────────────
+# Deploy continues but logs a warning – affected features won't work.
+soft_vars: []
+
+# ── Env file template ─────────────────────────────────────────────────────────
+# Auto-created when .env.<environment> doesn't exist.
+# ADMIN_KEY and SESSION_SECRET are auto-generated (see secrets above).
+# Fill these in before first deploy:
+env_template:
+  SQLITE_HUB_URL: "https://your-sqlite-hub.up.railway.app"
+  SQLITE_HUB_DB: "inbounce"
+  SQLITE_HUB_SERVICE_SECRET: "replace-me"
