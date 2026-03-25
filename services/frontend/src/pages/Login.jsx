@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useAuth } from '../App.jsx';
+import { LogoMark } from '../components/Logo.jsx';
 
 export default function Login() {
   const [key, setKey] = useState('');
@@ -28,40 +28,63 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-base px-4">
-      <div className="w-full max-w-sm">
-        <div className="flex items-center gap-2 justify-center mb-8">
-          <Zap size={20} className="text-accent" />
-          <span className="text-text-primary font-semibold text-lg tracking-tight">inbounce</span>
+    <div className="min-h-screen flex items-center justify-center bg-base px-4 relative overflow-hidden">
+      {/* Glow */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          top: '50%', left: '50%', transform: 'translate(-50%, -65%)',
+          width: 600, height: 500,
+          background: 'radial-gradient(ellipse at center, rgba(124,58,237,0.18) 0%, transparent 68%)',
+        }}
+      />
+
+      <div className="w-full max-w-sm relative z-10">
+        {/* Logo block */}
+        <div className="flex flex-col items-center gap-4 mb-10">
+          <LogoMark size={52} />
+          <div className="text-center">
+            <h1 className="text-text-primary font-bold tracking-tight leading-none text-xl">
+              in<span style={{ color: '#a78bfa' }}>bounce</span>
+            </h1>
+            <p className="text-text-muted text-xs mt-1.5 font-mono tracking-wide">admin dashboard</p>
+          </div>
         </div>
 
-        <div className="bg-elevated border border-border rounded-lg p-6">
-          <h1 className="text-text-primary font-semibold mb-1">Sign in</h1>
-          <p className="text-text-muted text-xs mb-5">Enter your admin key to continue</p>
+        {/* Card */}
+        <div
+          className="bg-elevated rounded-2xl p-7"
+          style={{ border: '1px solid rgba(139,92,246,0.18)', boxShadow: '0 0 0 4px rgba(124,58,237,0.06), 0 24px 64px rgba(0,0,0,0.55)' }}
+        >
+          <p className="text-text-secondary text-sm mb-5">Enter your admin key to continue</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-text-secondary text-xs mb-1.5">Admin key</label>
+              <label className="block text-text-muted text-xs font-mono uppercase tracking-widest mb-2">Admin key</label>
               <input
                 type="password"
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
                 placeholder="••••••••••••••••"
                 autoFocus
-                className="w-full bg-overlay border border-border rounded-md px-3 py-2 text-text-primary text-sm placeholder-text-muted focus:outline-none focus:border-accent transition-colors font-mono"
+                className="w-full bg-overlay rounded-lg px-3.5 py-2.5 text-text-primary text-sm placeholder-text-muted focus:outline-none transition-all font-mono"
+                style={{ border: '1px solid rgba(139,92,246,0.15)' }}
+                onFocus={e => e.target.style.borderColor = 'rgba(139,92,246,0.45)'}
+                onBlur={e => e.target.style.borderColor = 'rgba(139,92,246,0.15)'}
               />
             </div>
 
             {error && (
-              <p className="text-danger text-xs">{error}</p>
+              <p className="text-danger text-xs font-mono">{error}</p>
             )}
 
             <button
               type="submit"
               disabled={loading || !key.trim()}
-              className="w-full bg-accent hover:bg-accent-hover text-white font-medium text-sm py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full text-white font-semibold text-sm py-2.5 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
             >
-              {loading ? 'Signing in…' : 'Sign in'}
+              {loading ? 'Signing in…' : 'Sign in →'}
             </button>
           </form>
         </div>

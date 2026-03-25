@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Copy, Check, RefreshCw, Trash2, Loader, ChevronLeft } from 'lucide-react';
+import { Copy, Check, RefreshCw, Trash2, Loader, Inbox, Braces, Settings } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import SchemaBuilder from './SchemaBuilder.jsx';
 import Submissions from './Submissions.jsx';
@@ -80,10 +80,10 @@ ${formInputs}
   const active = mode === 'fetch' ? fetchSnippet : formSnippet;
 
   return (
-    <div className="bg-overlay border border-border rounded-lg p-4">
+    <div className="bg-overlay rounded-xl p-4" style={{ border: '1px solid rgba(139,92,246,0.12)' }}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-text-secondary text-xs font-medium">Embed snippet</span>
+          <span className="text-text-secondary text-xs font-semibold">Embed snippet</span>
           <div className="flex items-center gap-0.5 bg-surface border border-border rounded p-0.5">
             {['fetch', 'html'].map(m => (
               <button
@@ -171,43 +171,34 @@ export default function AppDetail() {
     }
   }
 
+  const navItems = [
+    { label: 'Submissions', Icon: Inbox,   active: tab === 'Submissions', onClick: () => setTab('Submissions') },
+    { label: 'Schema',      Icon: Braces,  active: tab === 'Schema',      onClick: () => setTab('Schema')      },
+    { label: 'Setup',       Icon: Settings, active: tab === 'Setup',      onClick: () => setTab('Setup')       },
+  ];
+
   if (loading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center py-20 text-text-muted">
-          <Loader size={18} className="animate-spin mr-2" /> Loading…
+        <div className="flex items-center justify-center py-24 text-text-muted">
+          <Loader size={16} className="animate-spin mr-2" />
+          <span className="text-xs font-mono">Loading…</span>
         </div>
       </Layout>
     );
   }
 
   return (
-    <Layout back={{ href: '/apps', label: 'Apps' }} title={app.name}>
+    <Layout appName={app.name} title={tab} navItems={navItems}>
       <div className="max-w-4xl mx-auto px-6 py-6">
-        {/* Tabs */}
-        <div className="flex gap-1 border-b border-border mb-6">
-          {TABS.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                tab === t
-                  ? 'text-text-primary border-accent'
-                  : 'text-text-secondary border-transparent hover:text-text-primary'
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
 
         {/* Setup tab */}
         {tab === 'Setup' && (
           <div className="space-y-4">
             {/* Info */}
-            <div className="bg-elevated border border-border rounded-lg p-5">
+            <div className="bg-elevated rounded-xl p-5" style={{ border: '1px solid rgba(139,92,246,0.12)' }}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-text-primary font-medium text-sm">App info</h2>
+                <h2 className="text-text-primary font-semibold text-sm">App info</h2>
                 {!editing && (
                   <button onClick={() => setEditing(true)} className="text-xs text-text-secondary hover:text-text-primary transition-colors">
                     Edit
@@ -262,9 +253,9 @@ export default function AppDetail() {
             </div>
 
             {/* API Key */}
-            <div className="bg-elevated border border-border rounded-lg p-5">
+            <div className="bg-elevated rounded-xl p-5" style={{ border: '1px solid rgba(139,92,246,0.12)' }}>
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-text-primary font-medium text-sm">API key</h2>
+                <h2 className="text-text-primary font-semibold text-sm">API key</h2>
                 <div className="flex items-center gap-3">
                   <button onClick={() => setKeyVisible((v) => !v)} className="text-xs text-text-secondary hover:text-text-primary transition-colors">
                     {keyVisible ? 'Hide' : 'Show'}
@@ -280,7 +271,7 @@ export default function AppDetail() {
                   </button>
                 </div>
               </div>
-              <div className="bg-overlay border border-border rounded px-3 py-2 font-mono text-xs text-text-secondary break-all">
+              <div className="bg-overlay rounded-lg px-3 py-2 font-mono text-xs text-text-secondary break-all" style={{ border: '1px solid rgba(139,92,246,0.1)' }}>
                 {keyVisible ? app.api_key : '•'.repeat(48)}
               </div>
               <p className="text-text-muted text-xs mt-2">Treat this as a semi-public write-only token — it grants submission access only.</p>
@@ -290,8 +281,8 @@ export default function AppDetail() {
             <EmbedSnippet apiKey={app.api_key} fields={schema} />
 
             {/* Danger zone */}
-            <div className="bg-elevated border border-danger/20 rounded-lg p-5">
-              <h2 className="text-danger font-medium text-sm mb-3">Danger zone</h2>
+            <div className="bg-elevated rounded-xl p-5" style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
+              <h2 className="text-danger font-semibold text-sm mb-3">Danger zone</h2>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-text-secondary text-xs">Delete this app</p>

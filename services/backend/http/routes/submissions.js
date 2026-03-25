@@ -44,7 +44,37 @@ export async function registerSubmissionsRoutes(server) {
     };
   });
 
-  // GET /api/apps/:id/submissions?page=1&limit=20&order=DESC
+  // GET /api/apps/:id/submissions/distribution?field=X&limit=8&after=TS
+  server.get('/api/apps/:id/submissions/distribution', { preHandler: [authHook] }, async (request, reply) => {
+    const app = await db.findById('apps', request.params.id);
+    if (!app) return reply.status(404).send({ error: 'App not found' });
+
+    const field = (request.query.field || '').trim();
+    const limit = Math.min(20, Math.max(1, parseInt(request.query.limit || '8', 10)));
+    const after = request.query.after ? parseInt(request.query.after, 10) : null;
+
+    if (!field || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(field)) {
+      return reply.status(400).send({ error: 'Invalid field name' });
+    }
+
+    const whereParts = ['app_id = ?', `json_extract(data, '$.${field}') IS NOT NULL`];
+    const params = [app.id];
+    if (after) { whereParts.push('created_at >= ?'); params.push(after); }
+    const whereClause = whereParts.join(' AND ');
+
+    const result = await db.exec(
+      `SELECT CAST(json_extract(data, '$.${field}') AS TEXT) AS value, COUNT(*) AS count
+       FROM submissions WHERE ${whereClause}
+       GROUP BY value ORDER BY count DESC LIMIT ?`,
+      [...params, limit]
+    );
+
+    const rows = result?.rows ?? [];
+    const total = rows.reduce((s, r) => s + Number(r.count), 0);
+    return { field, total, data: rows.map(r => ({ value: r.value, count: Number(r.count) })) };
+  });
+
+  // GET /api/apps/:id/submissions?page=1&limit=20&order=DESC&after=TS
   server.get('/api/apps/:id/submissions', { preHandler: [authHook] }, async (request, reply) => {
     const app = await db.findById('apps', request.params.id);
     if (!app) return reply.status(404).send({ error: 'App not found' });
@@ -53,36 +83,37 @@ export async function registerSubmissionsRoutes(server) {
     const limit = Math.min(100, Math.max(1, parseInt(request.query.limit || '20', 10)));
     const order = request.query.order === 'ASC' ? 'ASC' : 'DESC';
     const offset = (page - 1) * limit;
+    const after = request.query.after ? parseInt(request.query.after, 10) : null;
 
-    // Optional field-level filter
+    // Optional field-level filter — whitelist field name to prevent SQL injection
     const filterField = (request.query.filter_field || '').trim();
     const filterValue = (request.query.filter_value ?? '').trim();
-    // Whitelist field name to prevent SQL injection via json_extract path
     const hasFilter = filterField && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(filterField);
 
-    let rows, total;
+    // Build dynamic WHERE
+    const whereParts = ['app_id = ?'];
+    const baseParams = [app.id];
     if (hasFilter) {
-      const like = `%${filterValue}%`;
-      const [rowResult, countResult] = await Promise.all([
-        db.exec(
-          `SELECT * FROM submissions WHERE app_id = ? AND LOWER(CAST(json_extract(data, '$.${filterField}') AS TEXT)) LIKE LOWER(?) ORDER BY created_at ${order} LIMIT ? OFFSET ?`,
-          [app.id, like, limit, offset]
-        ),
-        db.exec(
-          `SELECT COUNT(*) AS n FROM submissions WHERE app_id = ? AND LOWER(CAST(json_extract(data, '$.${filterField}') AS TEXT)) LIKE LOWER(?)`,
-          [app.id, like]
-        ),
-      ]);
-      rows  = rowResult?.rows  ?? [];
-      total = Number(countResult?.rows?.[0]?.n ?? 0);
-    } else {
-      [rows, total] = await Promise.all([
-        db.find('submissions', { app_id: app.id }, { orderBy: 'created_at', order, limit, offset }),
-        db.count('submissions', { app_id: app.id }),
-      ]);
+      whereParts.push(`LOWER(CAST(json_extract(data, '$.${filterField}') AS TEXT)) LIKE LOWER(?)`);
+      baseParams.push(`%${filterValue}%`);
     }
+    if (after) { whereParts.push('created_at >= ?'); baseParams.push(after); }
+    const whereClause = whereParts.join(' AND ');
 
-    // Parse JSON data and meta fields for each row
+    const [rowResult, countResult] = await Promise.all([
+      db.exec(
+        `SELECT * FROM submissions WHERE ${whereClause} ORDER BY created_at ${order} LIMIT ? OFFSET ?`,
+        [...baseParams, limit, offset]
+      ),
+      db.exec(
+        `SELECT COUNT(*) AS n FROM submissions WHERE ${whereClause}`,
+        baseParams
+      ),
+    ]);
+
+    const rows  = rowResult?.rows ?? [];
+    const total = Number(countResult?.rows?.[0]?.n ?? 0);
+
     const data = rows.map((row) => ({
       ...row,
       data: JSON.parse(row.data || '{}'),

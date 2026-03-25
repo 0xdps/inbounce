@@ -38,8 +38,9 @@ export const api = {
   saveSchema: (id, fields)  => req('PUT', `/api/apps/${id}/schema`, { fields }),
 
   // Submissions
-  getStats:          (id)             => req('GET',    `/api/apps/${id}/submissions/stats`),
-  getSubmissions:    (id, params = {}) => req('GET',    `/api/apps/${id}/submissions?${new URLSearchParams(params)}`),
-  deleteSubmission:  (appId, sid)      => req('DELETE', `/api/apps/${appId}/submissions/${sid}`),
-  clearSubmissions:  (appId)           => req('DELETE', `/api/apps/${appId}/submissions`, { confirm: true }),
+  getStats:              (id)              => req('GET',    `/api/apps/${id}/submissions/stats`),
+  getFieldDistribution:  (id, field, after) => req('GET',   `/api/apps/${id}/submissions/distribution?${new URLSearchParams({ field, ...(after ? { after } : {}) })}`),
+  getSubmissions:        (id, params = {})  => req('GET',    `/api/apps/${id}/submissions?${new URLSearchParams(params)}`),
+  deleteSubmission:      (appId, sid)       => req('DELETE', `/api/apps/${appId}/submissions/${sid}`),
+  clearSubmissions:      (appId)            => req('DELETE', `/api/apps/${appId}/submissions`, { confirm: true }),
 };
