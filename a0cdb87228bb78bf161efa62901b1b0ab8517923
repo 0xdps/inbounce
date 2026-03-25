@@ -1,0 +1,48 @@
+services/frontend/src/pages/Submissions.jsx
+  e76c0e6a2a3ce37a 2,18-43,148,161
+.env.example
+  e76c0e6a2a3ce37a 5-6
+services/frontend/Dockerfile.dev
+  e76c0e6a2a3ce37a 1-6
+services/backend/core/config.js
+  e76c0e6a2a3ce37a 19-20
+services/backend/index.js
+  e76c0e6a2a3ce37a 3
+services/backend/http/routes/submissions.js
+  e76c0e6a2a3ce37a 25,29
+services/backend/core/db.js
+  e76c0e6a2a3ce37a 3,7-8,40,43-49
+services/backend/http/routes/inbound.js
+  e76c0e6a2a3ce37a 143-147,154
+services/frontend/src/main.jsx
+  e76c0e6a2a3ce37a 1-6
+services/frontend/postcss.config.js
+  e76c0e6a2a3ce37a 1-6
+services/frontend/vite.config.js
+  e76c0e6a2a3ce37a 11,16
+Justfile
+  e76c0e6a2a3ce37a 128-131
+docker-compose.yaml
+  e76c0e6a2a3ce37a 100-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.19",
+  "base_commit_sha": "a0cdb87228bb78bf161efa62901b1b0ab8517923",
+  "prompts": {
+    "e76c0e6a2a3ce37a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "fdd13a93-3208-48db-8276-078819ebd13b",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 131,
+      "total_deletions": 63,
+      "accepted_lines": 79,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/84a3d6c1b9b4b341d4b782e51b526346891bf8a96b9d2507cfbcda7ca6c69bb7"
+    }
+  }
+}
