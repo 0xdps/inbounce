@@ -1,0 +1,35 @@
+{
+  "name": "inbounce-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Inbounce — form backend as a service",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "author": "Devendra Pratap <dps.manit@gmail.com>",
+  "license": "ISC",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@fastify/compress": "^8.3.1",
+    "@fastify/cookie": "^11.0.0",
+    "@fastify/cors": "^10.1.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/static": "^9.0.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.0.0",
+    "jose": "^6.1.3",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1",
+    "sqlite-hub-client": "^0.8.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.1",
+    "prettier": "^3.6.2"
+  }
+}

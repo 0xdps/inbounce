@@ -1,0 +1,101 @@
+volumes:
+  backend_node_modules:
+
+services:
+  backend:
+    container_name: inbounce-backend
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    expose:
+      - "3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+    volumes:
+      - ./services/backend:/app/services/backend
+      - backend_node_modules:/app/services/backend/node_modules
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    container_name: inbounce-frontend
+    profiles: ["dev"]
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile.dev
+    expose:
+      - "5173"
+    environment:
+      VITE_API_URL: http://backend:3000
+      NODE_ENV: development
+    volumes:
+      - ./services/frontend/src:/app/src
+      - ./services/frontend/public:/app/public:ro
+      - ./services/frontend/index.html:/app/index.html:ro
+      - ./services/frontend/package.json:/app/package.json:ro
+      - ./services/frontend/vite.config.js:/app/vite.config.js:ro
+      - ./services/frontend/tailwind.config.js:/app/tailwind.config.js:ro
+      - ./services/frontend/postcss.config.js:/app/postcss.config.js:ro
+      - /app/node_modules
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  caddy:
+    container_name: inbounce-caddy
+    profiles: ["dev"]
+    image: caddy:2-alpine
+    ports:
+      - "${CADDY_INTERNAL_PORT:-8080}"
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        cat > /tmp/Caddyfile <<EOF
+        :$${CADDY_INTERNAL_PORT:-8080} {
+          handle /api/* {
+            reverse_proxy backend:3000
+          }
+
+          handle /s/* {
+            reverse_proxy backend:3000
+          }
+
+          handle /health {
+            reverse_proxy backend:3000
+          }
+
+          handle {
+            reverse_proxy frontend:5173 {
+              header_up Connection {>Connection}
+              header_up Upgrade {>Upgrade}
+            }
+          }
+
+          log {
+            output stdout
+            format console
+          }
+        }
+        EOF
+        caddy fmt --overwrite /tmp/Caddyfile
+        exec caddy run --config /tmp/Caddyfile
+    environment:
+      - CADDY_INTERNAL_PORT=${CADDY_INTERNAL_PORT:-8080}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started

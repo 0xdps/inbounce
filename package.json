@@ -1,0 +1,17 @@
+{
+  "name": "inbounce",
+  "version": "1.0.0",
+  "description": "Form backend as a service",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev:local": "npm run backend:dev & npm run frontend:dev",
+    "backend:dev": "npm --prefix services/backend run dev",
+    "frontend:dev": "npm --prefix services/frontend run dev"
+  },
+  "author": "Devendra Pratap <dps.manit@gmail.com>",
+  "license": "ISC",
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
