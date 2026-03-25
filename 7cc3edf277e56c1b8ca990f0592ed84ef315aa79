@@ -1,0 +1,24 @@
+services/frontend/src/pages/AppDetail.jsx
+  e76c0e6a2a3ce37a 24-43,45-53,56-58,61-81,84-101,103,124,127-134,290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.19",
+  "base_commit_sha": "7cc3edf277e56c1b8ca990f0592ed84ef315aa79",
+  "prompts": {
+    "e76c0e6a2a3ce37a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "fdd13a93-3208-48db-8276-078819ebd13b",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 82,
+      "total_deletions": 10,
+      "accepted_lines": 82,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/288990c63b3cacea7d6fe8a3cbcf84dab590546018063065d5639b7fc80926af"
+    }
+  }
+}
