@@ -35,29 +35,46 @@ cat > /tmp/Caddyfile <<EOF
 }
 
 :$PORT {
-  root * /usr/share/caddy
 
-  handle /api/* {
+  # ── manage.inbounce.app — Admin dashboard (SPA + internal API proxy) ──────
+  @manage_host host manage.inbounce.app
+  handle @manage_host {
+    root * /usr/share/caddy
+
+    handle /api/* {
+      reverse_proxy localhost:${BACKEND_PORT}
+    }
+
+    handle /s/* {
+      reverse_proxy localhost:${BACKEND_PORT}
+    }
+
+    handle /health {
+      reverse_proxy localhost:${BACKEND_PORT}
+    }
+
+    handle /assets/* {
+      header Cache-Control "public, max-age=31536000"
+      file_server
+    }
+
+    handle {
+      try_files {path} /index.html
+      file_server
+    }
+  }
+
+  # ── api.inbounce.app — All requests go straight to backend ───────────────
+  @api_host host api.inbounce.app
+  handle @api_host {
     reverse_proxy localhost:${BACKEND_PORT}
   }
 
-  handle /s/* {
-    reverse_proxy localhost:${BACKEND_PORT}
-  }
-
-  handle /health {
-    reverse_proxy localhost:${BACKEND_PORT}
-  }
-
-  handle /assets/* {
-    header Cache-Control "public, max-age=31536000"
-    file_server
-  }
-
+  # ── Fallback — direct IP / Railway healthcheck hits ──────────────────────
   handle {
-    try_files {path} /index.html
-    file_server
+    reverse_proxy localhost:${BACKEND_PORT}
   }
+
 }
 EOF
 

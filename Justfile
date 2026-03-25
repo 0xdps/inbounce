@@ -247,10 +247,19 @@ build:
 # INFRASTRUCTURE
 # ============================================================================
 
+# Start landing page dev server (Astro, port 4321)
+dev-landing:
+    npm --prefix services/landing run dev
+
+# Build landing page for production
+build-landing:
+    npm --prefix services/landing run build
+
 # Install npm dependencies for backend and frontend
 install:
     npm --prefix services/backend install
     npm --prefix services/frontend install
+    npm --prefix services/landing install
 
 # Copy .env.example → .env (if .env does not exist)
 env-setup:
