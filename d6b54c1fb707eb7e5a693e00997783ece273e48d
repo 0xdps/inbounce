@@ -1,0 +1,40 @@
+services/backend/http/routes/submissions.js
+  e76c0e6a2a3ce37a 5-46,57-83
+services/frontend/src/pages/AppDetail.jsx
+  e76c0e6a2a3ce37a 108,115,204-205
+services/backend/http/routes/inbound.js
+  e76c0e6a2a3ce37a 10-36,186-189
+services/frontend/src/pages/Submissions.jsx
+  e76c0e6a2a3ce37a 2,4,6-17,24-116,118-119,123-128,131,133-134,136-202,206,209-215,217-219,222-224,229-233,235,244,248-251,255-258,266-267,273-276,280-284,290-306,310-314,316-332,334-336,338,341-464
+services/frontend/src/pages/Apps.jsx
+  e76c0e6a2a3ce37a 135,137-138,140,142-151
+services/frontend/src/pages/SchemaBuilder.jsx
+  e76c0e6a2a3ce37a 4,8-16,123-129,138,140-142
+services/frontend/src/index.css
+  e76c0e6a2a3ce37a 14-15
+services/frontend/tailwind.config.js
+  e76c0e6a2a3ce37a 14-20,22-25
+services/frontend/src/lib/api.js
+  e76c0e6a2a3ce37a 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.19",
+  "base_commit_sha": "d6b54c1fb707eb7e5a693e00997783ece273e48d",
+  "prompts": {
+    "e76c0e6a2a3ce37a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "fdd13a93-3208-48db-8276-078819ebd13b",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 570,
+      "total_deletions": 199,
+      "accepted_lines": 553,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/e56ea174ce7c1764f6acf6e1bcb75ce358c07d845857603688694d7ce0f13179"
+    }
+  }
+}
