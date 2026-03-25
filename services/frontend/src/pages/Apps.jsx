@@ -132,21 +132,24 @@ export default function Apps() {
               <button
                 key={app.id}
                 onClick={() => navigate(`/apps/${app.id}`)}
-                className="w-full text-left bg-elevated border border-border hover:border-border-mid rounded-lg px-4 py-4 flex items-center justify-between group transition-colors"
+                className="w-full text-left bg-elevated border border-border hover:border-border-mid rounded-xl px-5 py-4 flex items-center justify-between group transition-all"
               >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-text-primary font-medium truncate">{app.name}</span>
-                    <span className="shrink-0 text-xs text-text-muted bg-overlay px-1.5 py-0.5 rounded">
-                      {app.submission_count} submission{app.submission_count !== 1 ? 's' : ''}
-                    </span>
-                  </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-text-primary font-medium">{app.name}</p>
                   {app.description && (
-                    <p className="text-text-muted text-xs mt-0.5 truncate">{app.description}</p>
+                    <p className="text-text-muted text-xs mt-0.5 truncate max-w-md">{app.description}</p>
                   )}
-                  <p className="text-text-muted text-xs mt-1">Created {formatDate(app.created_at)}</p>
+                  <p className="text-text-muted text-xs mt-2.5">Created {formatDate(app.created_at)}</p>
                 </div>
-                <ChevronRight size={16} className="text-text-muted group-hover:text-text-secondary transition-colors shrink-0 ml-4" />
+                <div className="flex items-center gap-6 shrink-0 ml-6">
+                  <div className="text-right">
+                    <p className="text-2xl font-semibold tabular-nums text-text-primary leading-none">
+                      {(app.submission_count ?? 0).toLocaleString()}
+                    </p>
+                    <p className="text-text-muted text-xs mt-1">submission{app.submission_count !== 1 ? 's' : ''}</p>
+                  </div>
+                  <ChevronRight size={16} className="text-text-muted group-hover:text-text-secondary transition-colors" />
+                </div>
               </button>
             ))}
           </div>

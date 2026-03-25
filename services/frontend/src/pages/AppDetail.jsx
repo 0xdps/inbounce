@@ -105,14 +105,14 @@ ${formInputs}
   );
 }
 
-const TABS = ['Overview', 'Schema', 'Submissions'];
+const TABS = ['Submissions', 'Schema', 'Setup'];
 
 export default function AppDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('Overview');
+  const [tab, setTab] = useState('Submissions');
   const [keyVisible, setKeyVisible] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -201,8 +201,8 @@ export default function AppDetail() {
           ))}
         </div>
 
-        {/* Overview tab */}
-        {tab === 'Overview' && (
+        {/* Setup tab */}
+        {tab === 'Setup' && (
           <div className="space-y-4">
             {/* Info */}
             <div className="bg-elevated border border-border rounded-lg p-5">

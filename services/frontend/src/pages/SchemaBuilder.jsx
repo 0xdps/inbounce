@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Loader, GripVertical, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api.js';
+import Select from '../components/Select.jsx';
 
 const FIELD_TYPES = ['string', 'email', 'number', 'boolean', 'url', 'date'];
+
+const TYPE_COLORS = {
+  string:  '#60a5fa',
+  email:   '#a78bfa',
+  number:  '#fbbf24',
+  boolean: '#34d399',
+  url:     '#22d3ee',
+  date:    '#fb7185',
+};
 
 function emptyField(position) {
   return { _key: Math.random().toString(36).slice(2), name: '', type: 'string', required: false, unique: false, position };
@@ -110,7 +120,13 @@ export default function SchemaBuilder({ appId }) {
               key={field._key}
               className="grid grid-cols-[1.5rem_1fr_140px_80px_80px_32px] gap-2 items-center bg-elevated border border-border rounded-lg px-2 py-2"
             >
-              <GripVertical size={14} className="text-text-muted cursor-grab" />
+              <div className="flex flex-col items-center gap-1.5 py-0.5">
+                <GripVertical size={14} className="text-text-muted cursor-grab" />
+                <div
+                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                  style={{ backgroundColor: TYPE_COLORS[field.type] ?? '#4a4a56' }}
+                />
+              </div>
 
               <input
                 value={field.name}
@@ -119,15 +135,11 @@ export default function SchemaBuilder({ appId }) {
                 className="bg-overlay border border-border rounded px-2 py-1.5 text-sm text-text-primary font-mono placeholder-text-muted focus:outline-none focus:border-accent transition-colors"
               />
 
-              <select
+              <Select
                 value={field.type}
-                onChange={(e) => updateField(field._key, { type: e.target.value })}
-                className="bg-overlay border border-border rounded px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
-              >
-                {FIELD_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
+                onChange={(val) => updateField(field._key, { type: val })}
+                options={FIELD_TYPES}
+              />
 
               <div className="flex justify-center">
                 <input

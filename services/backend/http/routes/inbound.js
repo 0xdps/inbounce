@@ -7,6 +7,33 @@ const MAX_BODY_BYTES = 16 * 1024; // 16KB
 const MAX_FIELDS     = 50;
 const MAX_STR_LEN    = 10_000;
 
+const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|localhost)/;
+
+async function fetchGeo(ip, submissionId) {
+  if (!ip || PRIVATE_IP_RE.test(ip)) return;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    const res = await fetch(
+      `http://ip-api.com/json/${ip}?fields=status,country,regionName,city,isp`,
+      { signal: ctrl.signal }
+    );
+    clearTimeout(timer);
+    if (!res.ok) return;
+    const geo = await res.json();
+    if (geo.status !== 'success') return;
+    const sub = await db.findOne('submissions', { id: submissionId });
+    if (!sub) return;
+    const existing = sub.meta ? JSON.parse(sub.meta) : {};
+    await db.exec(
+      'UPDATE submissions SET meta = ? WHERE id = ?',
+      [JSON.stringify({ ...existing, geo: { city: geo.city, region: geo.regionName, country: geo.country, isp: geo.isp } }), submissionId]
+    );
+  } catch {
+    // geo is optional — ignore failures
+  }
+}
+
 const TYPE_VALIDATORS = {
   string:  () => z.string().min(1).max(MAX_STR_LEN),
   email:   () => z.string().email().max(MAX_STR_LEN),
@@ -156,6 +183,9 @@ export async function registerInboundRoutes(server) {
     });
 
     logger.info({ appId: app.id, submissionId: id }, 'Submission received');
-    return reply.status(201).send({ ok: true, id });
+    reply.status(201).send({ ok: true, id });
+
+    // Fire-and-forget geo enrichment (doesn't block response)
+    fetchGeo(request.ip, id);
   });
 }
