@@ -11,6 +11,7 @@ RUN cd services/backend && npm install
 
 # Copy and build frontend
 COPY services/frontend/src        ./services/frontend/src
+COPY services/frontend/public     ./services/frontend/public
 COPY services/frontend/index.html ./services/frontend/
 COPY services/frontend/vite.config.js     ./services/frontend/
 COPY services/frontend/postcss.config.js  ./services/frontend/
