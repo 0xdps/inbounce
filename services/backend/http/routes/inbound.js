@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import db from '../../core/db.js';
 import logger from '../../core/logger.js';
+import { cacheGet, cacheSet } from '../../core/cache.js';
 
 const MAX_BODY_BYTES = 16 * 1024; // 16KB
 const MAX_FIELDS     = 50;
@@ -110,8 +111,14 @@ export async function registerInboundRoutes(server) {
       // Strip honeypot field before validation
       const { _hp, ...payload } = body;
 
-      // Look up app — silently ok if not found (don't leak key validity)
-      const app = await db.findOne('apps', { api_key: request.params.api_key });
+      // Look up app (TTL-cached, 60s) — silently ok if not found
+      const apiKey = request.params.api_key;
+      const appCacheKey = `app:${apiKey}`;
+      let app = cacheGet(appCacheKey);
+      if (!app) {
+        app = await db.findOne('apps', { api_key: apiKey });
+        if (app) cacheSet(appCacheKey, app);
+      }
       if (!app) return reply.status(200).send({ ok: true });
 
       // Per-app CORS origin check — silently ok (don't expose origin config)
@@ -120,11 +127,16 @@ export async function registerInboundRoutes(server) {
         return reply.status(200).send({ ok: true });
       }
 
-      // Load schema
-      const fields = await db.find('schema_fields', { app_id: app.id }, {
-        orderBy: 'position',
-        order: 'ASC',
-      });
+      // Load schema (TTL-cached, 60s)
+      const schemaCacheKey = `schema:${app.id}`;
+      let fields = cacheGet(schemaCacheKey);
+      if (!fields) {
+        fields = await db.find('schema_fields', { app_id: app.id }, {
+          orderBy: 'position',
+          order: 'ASC',
+        });
+        cacheSet(schemaCacheKey, fields);
+      }
 
       // No schema yet — silently ok
       if (fields.length === 0) {

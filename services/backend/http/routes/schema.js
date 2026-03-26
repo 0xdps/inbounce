@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import db from '../../core/db.js';
 import { authHook } from '../middleware/auth.js';
+import { cacheDel } from '../../core/cache.js';
 
 const VALID_TYPES = new Set(['string', 'email', 'number', 'boolean', 'url', 'date']);
 const RESERVED_NAMES = new Set(['id', 'app_id', 'data', 'idempotency_key', 'ip', 'created_at']);
@@ -68,6 +69,7 @@ export async function registerSchemaRoutes(server) {
       await db.insertMany('schema_fields', rows);
     }
 
+    cacheDel(`schema:${app.id}`);
     return rows;
   });
 }
