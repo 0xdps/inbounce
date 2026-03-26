@@ -3,6 +3,7 @@ import { z } from 'zod';
 import db from '../../core/db.js';
 import logger from '../../core/logger.js';
 import { cacheGet, cacheSet } from '../../core/cache.js';
+import config from '../../core/config.js';
 
 const MAX_BODY_BYTES = 16 * 1024; // 16KB
 const MAX_FIELDS     = 50;
@@ -90,6 +91,10 @@ export async function registerInboundRoutes(server) {
       // Body size guard — silently ok if too large, just drop it
       const contentLength = parseInt(request.headers['content-length'] || '0', 10);
       if (contentLength > MAX_BODY_BYTES) {
+        if (config.debugInbound && contentLength > MAX_BODY_BYTES) {
+          logger.warn({ contentLength }, 'Inbound: body too large, dropped');
+          return reply.status(413).send({ ok: false, error: 'Body too large' });
+        }
         return reply.status(200).send({ ok: true });
       }
 
@@ -97,14 +102,26 @@ export async function registerInboundRoutes(server) {
 
       // Malformed / missing body — silently ok
       if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        if (config.debugInbound && (!body || typeof body !== 'object' || Array.isArray(body))) {
+          logger.warn({ body }, 'Inbound: malformed or missing body');
+          return reply.status(400).send({ ok: false, error: 'Malformed or missing body' });
+        }
         return reply.status(200).send({ ok: true });
       }
       if (Object.keys(body).length > MAX_FIELDS) {
+        if (config.debugInbound && Object.keys(body).length > MAX_FIELDS) {
+          logger.warn({ fieldCount: Object.keys(body).length }, 'Inbound: too many fields');
+          return reply.status(400).send({ ok: false, error: 'Too many fields' });
+        }
         return reply.status(200).send({ ok: true });
       }
 
       // Honeypot check — fake ok to confuse bots
       if (body._hp) {
+        if (config.debugInbound && body._hp) {
+          logger.info({ body }, 'Inbound: honeypot triggered');
+          return reply.status(200).send({ ok: true, id: randomUUID(), debug: 'honeypot' });
+        }
         return reply.status(200).send({ ok: true, id: randomUUID() });
       }
 
@@ -119,11 +136,21 @@ export async function registerInboundRoutes(server) {
         app = await db.findOne('apps', { api_key: apiKey });
         if (app) cacheSet(appCacheKey, app);
       }
-      if (!app) return reply.status(200).send({ ok: true });
+      if (!app) {
+        if (config.debugInbound && !app) {
+          logger.warn({ apiKey }, 'Inbound: app not found');
+          return reply.status(404).send({ ok: false, error: 'App not found' });
+        }
+        return reply.status(200).send({ ok: true });
+      }
 
       // Per-app CORS origin check — silently ok (don't expose origin config)
       const allowedOrigins = JSON.parse(app.allowed_origins || '[]');
       if (allowedOrigins.length > 0 && origin && !allowedOrigins.includes(origin)) {
+        if (config.debugInbound && allowedOrigins.length > 0 && origin && !allowedOrigins.includes(origin)) {
+          logger.warn({ origin, allowedOrigins }, 'Inbound: origin not allowed');
+          return reply.status(403).send({ ok: false, error: 'Origin not allowed' });
+        }
         return reply.status(200).send({ ok: true });
       }
 
@@ -140,6 +167,10 @@ export async function registerInboundRoutes(server) {
 
       // No schema yet — silently ok
       if (fields.length === 0) {
+        if (config.debugInbound && fields.length === 0) {
+          logger.warn({ appId: app.id }, 'Inbound: no schema fields');
+          return reply.status(400).send({ ok: false, error: 'No schema fields' });
+        }
         return reply.status(200).send({ ok: true });
       }
 
@@ -147,6 +178,10 @@ export async function registerInboundRoutes(server) {
       const schema = buildZodSchema(fields);
       const result = schema.safeParse(payload);
       if (!result.success) {
+        if (config.debugInbound && !result.success) {
+          logger.warn({ issues: result.error.issues }, 'Inbound: schema validation failed');
+          return reply.status(400).send({ ok: false, error: 'Schema validation failed', details: result.error.issues });
+        }
         return reply.status(200).send({ ok: true });
       }
 
@@ -157,6 +192,10 @@ export async function registerInboundRoutes(server) {
       if (idempotencyKey) {
         const existing = await db.findOne('submissions', { idempotency_key: idempotencyKey });
         if (existing) {
+          if (config.debugInbound && idempotencyKey && existing) {
+            logger.info({ idempotencyKey, existingId: existing.id }, 'Inbound: idempotency key hit');
+            return reply.status(409).send({ ok: false, error: 'Duplicate idempotency key', id: existing.id });
+          }
           return reply.status(200).send({ ok: true, id: existing.id });
         }
       }
@@ -177,6 +216,10 @@ export async function registerInboundRoutes(server) {
             'UPDATE submissions SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?',
             [Math.floor(Date.now() / 1000), orig.id]
           );
+          if (config.debugInbound) {
+            logger.info({ field: field.name, value }, 'Inbound: unique field duplicate');
+            return reply.status(409).send({ ok: false, error: 'Duplicate unique field', field: field.name, value });
+          }
           return reply.status(200).send({ ok: true });
         }
       }
@@ -203,6 +246,10 @@ export async function registerInboundRoutes(server) {
             'UPDATE submissions SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?',
             [Math.floor(Date.now() / 1000), orig.id]
           );
+          if (config.debugInbound) {
+            logger.info({ group: groupFields.map(f => f.name), present }, 'Inbound: compound unique duplicate');
+            return reply.status(409).send({ ok: false, error: 'Duplicate compound unique group', group: groupFields.map(f => f.name), present });
+          }
           return reply.status(200).send({ ok: true });
         }
       }
