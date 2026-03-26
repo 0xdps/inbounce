@@ -70,9 +70,31 @@ cat > /tmp/Caddyfile <<EOF
     reverse_proxy localhost:${BACKEND_PORT}
   }
 
-  # ── Fallback — direct IP / Railway healthcheck hits ──────────────────────
+  # ── Fallback — Railway URL / direct IP / healthcheck hits ───────────────
   handle {
-    reverse_proxy localhost:${BACKEND_PORT}
+    root * /usr/share/caddy
+
+    handle /api/* {
+      reverse_proxy localhost:${BACKEND_PORT}
+    }
+
+    handle /s/* {
+      reverse_proxy localhost:${BACKEND_PORT}
+    }
+
+    handle /health {
+      reverse_proxy localhost:${BACKEND_PORT}
+    }
+
+    handle /assets/* {
+      header Cache-Control "public, max-age=31536000"
+      file_server
+    }
+
+    handle {
+      try_files {path} /index.html
+      file_server
+    }
   }
 
 }
