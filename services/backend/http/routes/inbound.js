@@ -72,150 +72,157 @@ export async function registerInboundRoutes(server) {
         max: 30,
         timeWindow: '1 minute',
         keyGenerator: (req) => `${req.ip}:${req.params.api_key}`,
-        errorResponseBuilder: () => ({ error: 'Too many submissions — slow down' }),
+        errorResponseBuilder: (_req, reply) => {
+          reply.statusCode = 200;
+          return { ok: true };
+        },
       },
     },
   }, async (request, reply) => {
     const origin = request.headers.origin;
 
-    // Always set permissive CORS on this public endpoint;
-    // per-app origin enforcement happens below via 403
+    // Always set permissive CORS on this public endpoint
     reply.header('Access-Control-Allow-Origin', origin || '*');
     reply.header('Access-Control-Allow-Credentials', 'true');
 
-    // Body size guard
-    const contentLength = parseInt(request.headers['content-length'] || '0', 10);
-    if (contentLength > MAX_BODY_BYTES) {
-      return reply.status(413).send({ error: 'Payload too large' });
-    }
-
-    const body = request.body;
-
-    // Field count guard
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return reply.status(400).send({ error: 'Request body must be a JSON object' });
-    }
-    if (Object.keys(body).length > MAX_FIELDS) {
-      return reply.status(400).send({ error: `Too many fields — maximum is ${MAX_FIELDS}` });
-    }
-
-    // Honeypot check — silent fake 201 to confuse bots
-    if (body._hp) {
-      return reply.status(201).send({ ok: true, id: randomUUID() });
-    }
-
-    // Strip honeypot field before validation
-    const { _hp, ...payload } = body;
-
-    // Look up app
-    const app = await db.findOne('apps', { api_key: request.params.api_key });
-    if (!app) return reply.status(404).send({ error: 'App not found' });
-
-    // Per-app CORS origin check
-    const allowedOrigins = JSON.parse(app.allowed_origins || '[]');
-    if (allowedOrigins.length > 0 && origin && !allowedOrigins.includes(origin)) {
-      return reply.status(403).send({ error: 'Origin not allowed' });
-    }
-
-    // Load schema
-    const fields = await db.find('schema_fields', { app_id: app.id }, {
-      orderBy: 'position',
-      order: 'ASC',
-    });
-
-    if (fields.length === 0) {
-      return reply.status(409).send({ error: 'Schema not defined yet — define fields in the dashboard first' });
-    }
-
-    // Validate with Zod
-    const schema = buildZodSchema(fields);
-    const result = schema.safeParse(payload);
-    if (!result.success) {
-      const first = result.error.errors[0];
-      const field = first.path.join('.') || 'unknown';
-      return reply.status(400).send({ error: `${first.message} (field: ${field})` });
-    }
-
-    const validatedData = result.data;
-
-    // Idempotency key check
-    const idempotencyKey = request.headers['idempotency-key'] || null;
-    if (idempotencyKey) {
-      const existing = await db.findOne('submissions', { idempotency_key: idempotencyKey });
-      if (existing) {
-        return reply.status(201).send({ ok: true, id: existing.id });
+    try {
+      // Body size guard — silently ok if too large, just drop it
+      const contentLength = parseInt(request.headers['content-length'] || '0', 10);
+      if (contentLength > MAX_BODY_BYTES) {
+        return reply.status(200).send({ ok: true });
       }
-    }
 
-    // Individual unique field checks — duplicates bump a counter on the original, no 409
-    for (const field of fields) {
-      if (!field.unique || field.compound_key) continue; // compound fields handled separately
-      const value = validatedData[field.name];
-      if (value === undefined) continue;
+      const body = request.body;
 
-      const hit = await db.exec(
-        `SELECT id FROM submissions WHERE app_id = ? AND json_extract(data, '$.${field.name}') = ? LIMIT 1`,
-        [app.id, String(value)]
-      );
-      const orig = hit?.rows?.[0];
-      if (orig) {
-        await db.exec(
-          'UPDATE submissions SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?',
-          [Math.floor(Date.now() / 1000), orig.id]
+      // Malformed / missing body — silently ok
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return reply.status(200).send({ ok: true });
+      }
+      if (Object.keys(body).length > MAX_FIELDS) {
+        return reply.status(200).send({ ok: true });
+      }
+
+      // Honeypot check — fake ok to confuse bots
+      if (body._hp) {
+        return reply.status(200).send({ ok: true, id: randomUUID() });
+      }
+
+      // Strip honeypot field before validation
+      const { _hp, ...payload } = body;
+
+      // Look up app — silently ok if not found (don't leak key validity)
+      const app = await db.findOne('apps', { api_key: request.params.api_key });
+      if (!app) return reply.status(200).send({ ok: true });
+
+      // Per-app CORS origin check — silently ok (don't expose origin config)
+      const allowedOrigins = JSON.parse(app.allowed_origins || '[]');
+      if (allowedOrigins.length > 0 && origin && !allowedOrigins.includes(origin)) {
+        return reply.status(200).send({ ok: true });
+      }
+
+      // Load schema
+      const fields = await db.find('schema_fields', { app_id: app.id }, {
+        orderBy: 'position',
+        order: 'ASC',
+      });
+
+      // No schema yet — silently ok
+      if (fields.length === 0) {
+        return reply.status(200).send({ ok: true });
+      }
+
+      // Validate with Zod — silently ok on failure (caller gets no hint)
+      const schema = buildZodSchema(fields);
+      const result = schema.safeParse(payload);
+      if (!result.success) {
+        return reply.status(200).send({ ok: true });
+      }
+
+      const validatedData = result.data;
+
+      // Idempotency key check
+      const idempotencyKey = request.headers['idempotency-key'] || null;
+      if (idempotencyKey) {
+        const existing = await db.findOne('submissions', { idempotency_key: idempotencyKey });
+        if (existing) {
+          return reply.status(200).send({ ok: true, id: existing.id });
+        }
+      }
+
+      // Individual unique field checks — duplicates bump a counter, always return ok
+      for (const field of fields) {
+        if (!field.unique || field.compound_key) continue;
+        const value = validatedData[field.name];
+        if (value === undefined) continue;
+
+        const hit = await db.exec(
+          `SELECT id FROM submissions WHERE app_id = ? AND json_extract(data, '$.${field.name}') = ? LIMIT 1`,
+          [app.id, String(value)]
         );
-        return reply.status(200).send({ ok: true, id: orig.id, duplicate: true });
+        const orig = hit?.rows?.[0];
+        if (orig) {
+          await db.exec(
+            'UPDATE submissions SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?',
+            [Math.floor(Date.now() / 1000), orig.id]
+          );
+          return reply.status(200).send({ ok: true });
+        }
       }
-    }
 
-    // Compound unique checks — fields sharing the same compound_key are checked as a tuple
-    const compoundGroups = {};
-    for (const field of fields) {
-      if (!field.compound_key) continue;
-      if (!compoundGroups[field.compound_key]) compoundGroups[field.compound_key] = [];
-      compoundGroups[field.compound_key].push(field);
-    }
-    for (const groupFields of Object.values(compoundGroups)) {
-      const present = groupFields.filter(f => validatedData[f.name] !== undefined);
-      if (present.length === 0) continue;
-      const conditions = present.map(f => `json_extract(data, '$.${f.name}') = ?`);
-      const params     = present.map(f => String(validatedData[f.name]));
-      const hit = await db.exec(
-        `SELECT id FROM submissions WHERE app_id = ? AND ${conditions.join(' AND ')} LIMIT 1`,
-        [app.id, ...params]
-      );
-      const orig = hit?.rows?.[0];
-      if (orig) {
-        await db.exec(
-          'UPDATE submissions SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?',
-          [Math.floor(Date.now() / 1000), orig.id]
+      // Compound unique checks
+      const compoundGroups = {};
+      for (const field of fields) {
+        if (!field.compound_key) continue;
+        if (!compoundGroups[field.compound_key]) compoundGroups[field.compound_key] = [];
+        compoundGroups[field.compound_key].push(field);
+      }
+      for (const groupFields of Object.values(compoundGroups)) {
+        const present = groupFields.filter(f => validatedData[f.name] !== undefined);
+        if (present.length === 0) continue;
+        const conditions = present.map(f => `json_extract(data, '$.${f.name}') = ?`);
+        const params     = present.map(f => String(validatedData[f.name]));
+        const hit = await db.exec(
+          `SELECT id FROM submissions WHERE app_id = ? AND ${conditions.join(' AND ')} LIMIT 1`,
+          [app.id, ...params]
         );
-        return reply.status(200).send({ ok: true, id: orig.id, duplicate: true });
+        const orig = hit?.rows?.[0];
+        if (orig) {
+          await db.exec(
+            'UPDATE submissions SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?',
+            [Math.floor(Date.now() / 1000), orig.id]
+          );
+          return reply.status(200).send({ ok: true });
+        }
       }
+
+      // Insert submission
+      const id = randomUUID();
+      const now = Math.floor(Date.now() / 1000);
+
+      const meta = JSON.stringify({
+        ua:       request.headers['user-agent'] ?? null,
+        referrer: request.headers['referer'] || request.headers['referrer'] || null,
+      });
+
+      await db.insert('submissions', {
+        id,
+        app_id:           app.id,
+        data:             JSON.stringify(validatedData),
+        idempotency_key:  idempotencyKey,
+        ip:               request.ip,
+        meta,
+        created_at:       now,
+      });
+
+      logger.info({ appId: app.id, submissionId: id }, 'Submission received');
+      reply.status(200).send({ ok: true, id });
+
+      // Fire-and-forget geo enrichment (doesn't block response)
+      fetchGeo(request.ip, id);
+
+    } catch (err) {
+      logger.error({ err }, 'Unhandled error in submission handler');
+      reply.status(500).send({ ok: false, error: 'Internal server error' });
     }
-
-    // Insert submission
-    const id = randomUUID();
-    const now = Math.floor(Date.now() / 1000);
-
-    const meta = JSON.stringify({
-      ua:       request.headers['user-agent'] ?? null,
-      referrer: request.headers['referer'] || request.headers['referrer'] || null,
-    });
-
-    await db.insert('submissions', {
-      id,
-      app_id:           app.id,
-      data:             JSON.stringify(validatedData),
-      idempotency_key:  idempotencyKey,
-      ip:               request.ip,
-      meta,
-      created_at:       now,
-    });
-
-    logger.info({ appId: app.id, submissionId: id }, 'Submission received');
-    reply.status(201).send({ ok: true, id });
-
-    // Fire-and-forget geo enrichment (doesn't block response)
-    fetchGeo(request.ip, id);
   });
 }
