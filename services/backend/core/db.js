@@ -55,14 +55,6 @@ export async function initializeSchema() {
   await db.createIndex('idx_schema_fields_app_id',    'schema_fields',  ['app_id'],           { ifNotExists: true });
   await db.createIndex('idx_apps_api_key',            'apps',           ['api_key'],          { unique: true, ifNotExists: true });
 
-  await db.createTable('waitlist_signups', [
-    { name: 'id',         type: 'TEXT',    primaryKey: true },
-    { name: 'email',      type: 'TEXT',    notNull: true, unique: true },
-    { name: 'token',      type: 'TEXT',    notNull: true, unique: true },
-    { name: 'created_at', type: 'INTEGER', notNull: true },
-  ], { ifNotExists: true });
-
-  await db.createIndex('idx_waitlist_email', 'waitlist_signups', ['email'], { unique: true, ifNotExists: true });
 }
 
 export default db;

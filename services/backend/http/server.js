@@ -10,7 +10,6 @@ import { registerAppsRoutes } from './routes/apps.js';
 import { registerSchemaRoutes } from './routes/schema.js';
 import { registerSubmissionsRoutes } from './routes/submissions.js';
 import { registerInboundRoutes } from './routes/inbound.js';
-import { registerWaitlistRoutes } from './routes/waitlist.js';
 
 const server = Fastify({ logger: false, trustProxy: true });
 
@@ -42,6 +41,5 @@ await registerAppsRoutes(server);
 await registerSchemaRoutes(server);
 await registerSubmissionsRoutes(server);
 await registerInboundRoutes(server);
-await registerWaitlistRoutes(server);
 
 export default server;

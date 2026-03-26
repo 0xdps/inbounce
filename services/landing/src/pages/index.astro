@@ -1,5 +1,5 @@
 ---
-const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? '/api/waitlist';
+const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? 'https://api.inbounce.app/s/3e44feaf5183991630cb4170c78fa686be2e89e49dbf2e3e14405e23444286de';
 ---
 
 <!doctype html>
@@ -562,13 +562,8 @@ const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? '/api/waitlist';
 
           <div class="wl-success" id="hero-success">
             <div class="success-title">✓ &nbsp;You're on the list!</div>
-            <div class="success-label">Your invite link</div>
-            <div class="invite-link" id="hero-link" title="Click to copy">
-              <span class="link-text">generating…</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            </div>
-            <p style="font-size:12px;color:var(--muted);text-align:center;line-height:1.6">
-              Share your link — if someone signs up through it,<br>you move up the queue.
+            <p style="font-size:12px;color:var(--muted);text-align:center;line-height:1.6;margin-top:8px">
+              We'll reach out when it's your turn.
             </p>
           </div>
         </div>
@@ -797,13 +792,8 @@ const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? '/api/waitlist';
 
             <div class="wl-success" id="cta-success">
               <div class="success-title">✓ &nbsp;You're on the list!</div>
-              <div class="success-label">Your invite link</div>
-              <div class="invite-link" id="cta-link" title="Click to copy">
-                <span class="link-text">generating…</span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-              </div>
-              <p style="font-size:12px;color:var(--muted);text-align:center;line-height:1.7">
-                Share your link with others to move up the queue.
+              <p style="font-size:12px;color:var(--muted);text-align:center;line-height:1.7;margin-top:8px">
+                We'll reach out when it's your turn.
               </p>
             </div>
           </div>
@@ -851,7 +841,7 @@ const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? '/api/waitlist';
     document.querySelectorAll('.reveal, #mockup').forEach(el => io.observe(el));
 
     // ── Waitlist submission ───────────────────────
-    async function submitWaitlist(formEl, successEl, linkEl) {
+    async function submitWaitlist(formEl, successEl) {
       const emailInput = formEl.querySelector('input[type="email"]');
       const btn = formEl.querySelector('button[type="submit"]');
       const email = emailInput.value.trim();
@@ -869,18 +859,9 @@ const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? '/api/waitlist';
         });
 
         if (!res.ok) throw new Error('server error');
-        const data = await res.json();
 
-        if (data.ok) {
-          const inviteUrl = `${window.location.origin}/i/${data.token}`;
-          linkEl.querySelector('.link-text').textContent = inviteUrl;
-          linkEl.dataset.url = inviteUrl;
-          formEl.classList.add('hidden');
-          successEl.classList.add('visible');
-        } else {
-          btn.textContent = 'Try again';
-          btn.classList.remove('loading');
-        }
+        formEl.classList.add('hidden');
+        successEl.classList.add('visible');
       } catch {
         btn.textContent = origText;
         btn.classList.remove('loading');
@@ -891,27 +872,12 @@ const WAITLIST_URL = import.meta.env.PUBLIC_WAITLIST_URL ?? '/api/waitlist';
 
     ['hero-form', 'cta-form'].forEach((id, i) => {
       const successId = i === 0 ? 'hero-success' : 'cta-success';
-      const linkId = i === 0 ? 'hero-link' : 'cta-link';
       document.getElementById(id)?.addEventListener('submit', e => {
         e.preventDefault();
         submitWaitlist(
           document.getElementById(id),
           document.getElementById(successId),
-          document.getElementById(linkId),
         );
-      });
-    });
-
-    // ── Copy invite link ──────────────────────────
-    document.querySelectorAll('.invite-link').forEach(el => {
-      el.addEventListener('click', () => {
-        const url = el.dataset.url || el.querySelector('.link-text').textContent;
-        navigator.clipboard.writeText(url).then(() => {
-          const span = el.querySelector('.link-text');
-          const orig = span.textContent;
-          span.textContent = 'Copied!';
-          setTimeout(() => { span.textContent = orig; }, 2000);
-        });
       });
     });
 
