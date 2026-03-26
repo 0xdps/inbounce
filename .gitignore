@@ -1,3 +1,6 @@
+# Docs (kept locally, not tracked)
+docs/
+
 # Dependencies
 node_modules/
 services/backend/node_modules/
@@ -172,3 +175,4 @@ vite.config.ts.timestamp-*
 # Built Visual Studio Code Extensions
 *.vsix
 services/backend/scripts/seed.js
+docs/*
