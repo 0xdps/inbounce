@@ -23,7 +23,7 @@ const TYPE_HINTS = {
 };
 
 function emptyField(position) {
-  return { _key: Math.random().toString(36).slice(2), name: '', type: 'string', required: false, unique: false, position };
+  return { _key: Math.random().toString(36).slice(2), name: '', type: 'string', required: false, unique: false, compound_key: '', position };
 }
 
 export default function SchemaBuilder({ appId }) {
@@ -65,6 +65,7 @@ export default function SchemaBuilder({ appId }) {
       type: f.type,
       required: !!f.required,
       unique: !!f.unique,
+      compound_key: f.compound_key?.trim() || null,
       position: i,
     }));
 
@@ -188,6 +189,22 @@ export default function SchemaBuilder({ appId }) {
                     <span className="text-text-muted text-xs font-mono">unique</span>
                   </label>
                 </div>
+              </div>
+
+              {/* Row 3: compound group (optional) */}
+              <div className="flex items-center gap-2 mt-2.5 pt-2" style={{ borderTop: '1px solid rgba(139,92,246,0.06)' }}>
+                <span className="text-[10px] font-mono text-text-muted shrink-0">compound</span>
+                <input
+                  value={field.compound_key || ''}
+                  onChange={(e) => updateField(field._key, { compound_key: e.target.value.replace(/[^a-zA-Z0-9_]/g, '') })}
+                  placeholder="group name (optional)"
+                  spellCheck={false}
+                  title="Fields sharing the same group name are checked as a tuple — the combination must be unique"
+                  className="flex-1 bg-transparent text-text-muted font-mono text-[11px] placeholder-text-muted focus:text-text-secondary focus:outline-none"
+                  style={{ borderBottom: '1px solid rgba(139,92,246,0.08)', paddingBottom: 2 }}
+                  onFocus={e => e.target.style.borderBottomColor = 'rgba(139,92,246,0.3)'}
+                  onBlur={e => e.target.style.borderBottomColor = 'rgba(139,92,246,0.08)'}
+                />
               </div>
             </div>
           ))

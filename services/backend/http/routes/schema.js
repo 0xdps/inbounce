@@ -20,6 +20,9 @@ function validateFields(fields) {
     if (RESERVED_NAMES.has(f.name)) return `"${f.name}" is a reserved field name`;
     if (!VALID_TYPES.has(f.type)) return `Invalid type: "${f.type}" — allowed: ${[...VALID_TYPES].join(', ')}`;
     if (names.has(f.name)) return `Duplicate field name: "${f.name}"`;
+    if (f.compound_key !== null && f.compound_key !== undefined && f.compound_key !== '') {
+      if (!FIELD_NAME_RE.test(f.compound_key)) return `Invalid compound_key: "${f.compound_key}" — use letters, numbers, underscores only`;
+    }
     names.add(f.name);
   }
   return null;
@@ -51,13 +54,14 @@ export async function registerSchemaRoutes(server) {
     await db.delete('schema_fields', { app_id: app.id });
 
     const rows = fields.map((f, i) => ({
-      id:       randomUUID(),
-      app_id:   app.id,
-      name:     f.name,
-      type:     f.type,
-      required: f.required ? 1 : 0,
-      unique:   f.unique ? 1 : 0,
-      position: f.position ?? i,
+      id:           randomUUID(),
+      app_id:       app.id,
+      name:         f.name,
+      type:         f.type,
+      required:     f.required ? 1 : 0,
+      unique:       f.unique ? 1 : 0,
+      position:     f.position ?? i,
+      compound_key: (f.compound_key && FIELD_NAME_RE.test(f.compound_key)) ? f.compound_key : null,
     }));
 
     if (rows.length > 0) {

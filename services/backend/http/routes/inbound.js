@@ -147,19 +147,49 @@ export async function registerInboundRoutes(server) {
       }
     }
 
-    // Unique field checks
+    // Individual unique field checks — duplicates bump a counter on the original, no 409
     for (const field of fields) {
-      if (!field.unique) continue;
+      if (!field.unique || field.compound_key) continue; // compound fields handled separately
       const value = validatedData[field.name];
       if (value === undefined) continue;
 
-      const rows = await db.exec(
-        `SELECT COUNT(*) AS n FROM submissions WHERE app_id = ? AND json_extract(data, '$.${field.name}') = ?`,
+      const hit = await db.exec(
+        `SELECT id FROM submissions WHERE app_id = ? AND json_extract(data, '$.${field.name}') = ? LIMIT 1`,
         [app.id, String(value)]
       );
-      const count = rows?.rows?.[0]?.n ?? 0;
-      if (count > 0) {
-        return reply.status(409).send({ error: `Duplicate value for unique field: ${field.name}` });
+      const orig = hit?.rows?.[0];
+      if (orig) {
+        await db.exec(
+          'UPDATE submissions SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?',
+          [Math.floor(Date.now() / 1000), orig.id]
+        );
+        return reply.status(200).send({ ok: true, id: orig.id, duplicate: true });
+      }
+    }
+
+    // Compound unique checks — fields sharing the same compound_key are checked as a tuple
+    const compoundGroups = {};
+    for (const field of fields) {
+      if (!field.compound_key) continue;
+      if (!compoundGroups[field.compound_key]) compoundGroups[field.compound_key] = [];
+      compoundGroups[field.compound_key].push(field);
+    }
+    for (const groupFields of Object.values(compoundGroups)) {
+      const present = groupFields.filter(f => validatedData[f.name] !== undefined);
+      if (present.length === 0) continue;
+      const conditions = present.map(f => `json_extract(data, '$.${f.name}') = ?`);
+      const params     = present.map(f => String(validatedData[f.name]));
+      const hit = await db.exec(
+        `SELECT id FROM submissions WHERE app_id = ? AND ${conditions.join(' AND ')} LIMIT 1`,
+        [app.id, ...params]
+      );
+      const orig = hit?.rows?.[0];
+      if (orig) {
+        await db.exec(
+          'UPDATE submissions SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?',
+          [Math.floor(Date.now() / 1000), orig.id]
+        );
+        return reply.status(200).send({ ok: true, id: orig.id, duplicate: true });
       }
     }
 

@@ -22,13 +22,14 @@ export async function initializeSchema() {
   ], { ifNotExists: true });
 
   await db.createTable('schema_fields', [
-    { name: 'id',       type: 'TEXT',    primaryKey: true },
-    { name: 'app_id',   type: 'TEXT',    notNull: true },
-    { name: 'name',     type: 'TEXT',    notNull: true },
-    { name: 'type',     type: 'TEXT',    notNull: true },
-    { name: 'required', type: 'INTEGER', notNull: true, default: 0 },
-    { name: 'unique',   type: 'INTEGER', notNull: true, default: 0 },
-    { name: 'position', type: 'INTEGER', notNull: true, default: 0 },
+    { name: 'id',           type: 'TEXT',    primaryKey: true },
+    { name: 'app_id',       type: 'TEXT',    notNull: true },
+    { name: 'name',         type: 'TEXT',    notNull: true },
+    { name: 'type',         type: 'TEXT',    notNull: true },
+    { name: 'required',     type: 'INTEGER', notNull: true, default: 0 },
+    { name: 'unique',       type: 'INTEGER', notNull: true, default: 0 },
+    { name: 'position',     type: 'INTEGER', notNull: true, default: 0 },
+    { name: 'compound_key', type: 'TEXT' },
   ], { ifNotExists: true });
 
   await db.createTable('submissions', [
@@ -38,15 +39,16 @@ export async function initializeSchema() {
     { name: 'idempotency_key',  type: 'TEXT' },
     { name: 'ip',               type: 'TEXT' },
     { name: 'meta',             type: 'TEXT' },
+    { name: 'dup_count',        type: 'INTEGER', notNull: true, default: 0 },
+    { name: 'last_seen_at',     type: 'INTEGER' },
     { name: 'created_at',       type: 'INTEGER', notNull: true },
   ], { ifNotExists: true });
 
-  // Migration: add meta column to existing tables that predate this column
-  try {
-    await db.exec('ALTER TABLE submissions ADD COLUMN meta TEXT');
-  } catch (_) {
-    // Column already exists — safe to ignore
-  }
+  // Migration: add columns to existing tables that predate them
+  try { await db.exec('ALTER TABLE submissions ADD COLUMN meta TEXT'); } catch (_) {}
+  try { await db.exec('ALTER TABLE submissions ADD COLUMN dup_count INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+  try { await db.exec('ALTER TABLE submissions ADD COLUMN last_seen_at INTEGER'); } catch (_) {}
+  try { await db.exec('ALTER TABLE schema_fields ADD COLUMN compound_key TEXT'); } catch (_) {}
 
   await db.createIndex('idx_submissions_app_id',      'submissions',    ['app_id'],           { ifNotExists: true });
   await db.createIndex('idx_submissions_idempotency', 'submissions',    ['idempotency_key'],  { unique: true, ifNotExists: true });

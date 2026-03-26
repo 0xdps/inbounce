@@ -211,19 +211,27 @@ function RowDetail({ row, schema, onDelete }) {
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: '1px solid rgba(139,92,246,0.08)' }}>
-        <div className="flex items-center gap-2">
-          <span className="text-text-muted text-[11px] font-mono truncate max-w-[280px]">{row.id}</span>
-          <CopyBtn text={row.id} />
-        </div>
-        <button
-          onClick={onDelete}
-          className="flex items-center gap-1.5 text-xs text-text-muted hover:text-danger transition-colors"
-        >
-          <Trash2 size={12} />
-          Delete
-        </button>
-      </div>
+            <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: '1px solid rgba(139,92,246,0.08)' }}>
+              <div className="flex items-center gap-2">
+                <span className="text-text-muted text-[11px] font-mono truncate max-w-[280px]">{row.id}</span>
+                <CopyBtn text={row.id} />
+              </div>
+              <div className="flex items-center gap-4">
+                {row.dup_count > 0 && (
+                  <span className="text-[11px] font-mono" style={{ color: '#fbbf24' }}>
+                    ×{row.dup_count} dup{row.dup_count !== 1 ? 's' : ''}
+                    {row.last_seen_at ? <span className="text-text-muted ml-1">· last {timeAgo(row.last_seen_at)}</span> : null}
+                  </span>
+                )}
+                <button
+                  onClick={onDelete}
+                  className="flex items-center gap-1.5 text-xs text-text-muted hover:text-danger transition-colors"
+                >
+                  <Trash2 size={12} />
+                  Delete
+                </button>
+              </div>
+            </div>
     </div>
   );
 }
@@ -550,7 +558,18 @@ export default function Submissions({ appId }) {
                           <td className="px-3 py-3.5 text-xs text-text-muted">…</td>
                         )}
                         <td className="px-3 py-3.5 text-xs text-text-muted whitespace-nowrap font-mono" title={fullDate(row.created_at)}>
-                          {timeAgo(row.created_at)}
+                          <div className="flex items-center gap-2">
+                            <span>{timeAgo(row.created_at)}</span>
+                            {row.dup_count > 0 && (
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[10px] font-mono leading-none"
+                                style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.2)' }}
+                                title={`${row.dup_count} duplicate submission${row.dup_count !== 1 ? 's' : ''} merged`}
+                              >
+                                ×{row.dup_count}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="pr-2 py-3.5" onClick={e => e.stopPropagation()}>
                           <button
