@@ -36,14 +36,14 @@ cat > /tmp/Caddyfile <<EOF
 
 :$PORT {
 
-  # ── inbounce.app apex — redirect to landing (should normally hit Vercel) ─
-  @apex_host host inbounce.app www.inbounce.app
+  # ── inbounce.app apex — redirect to admin (DNS misconfiguration safety net) ─
+  @apex_host host inbounce.app
   handle @apex_host {
-    redir https://inbounce.app{uri} 301
+    redir https://manage.inbounce.app{uri} 301
   }
 
-  # ── manage.inbounce.app — Admin dashboard (SPA + internal API proxy) ──────
-  @manage_host host manage.inbounce.app
+  # ── manage.inbounce.app + www.inbounce.app — Admin dashboard ─────────────
+  @manage_host host manage.inbounce.app www.inbounce.app
   handle @manage_host {
     root * /usr/share/caddy
 
