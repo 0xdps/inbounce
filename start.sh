@@ -72,9 +72,11 @@ cat > /tmp/Caddyfile <<EOF
     }
   }
 
-  # ── api.inbounce.app — All requests go straight to backend ───────────────
+  # ── api.inbounce.app — Public API subdomain ──────────────────────────────
   @api_host host api.inbounce.app
   handle @api_host {
+    # Rewrite /submit to /api/submit for cleaner public URLs
+    rewrite /submit /api/submit
     reverse_proxy localhost:${BACKEND_PORT}
   }
 

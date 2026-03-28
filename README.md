@@ -23,11 +23,13 @@ Content-Type: application/json
 
 **Production:**
 ```bash
-POST https://api.inbounce.app/submit
-Authorization: Bearer <your-api-key>
-Content-Type: application/json
-
-{ "name": "Alice", "email": "alice@example.com" }
+curl -X POST 'https://api.inbounce.app/submit' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <your-api-key>' \
+  -d '{
+    "name": "Alice",
+    "email": "alice@example.com"
+  }'
 ```
 
 The `slug` is a **public** form identifier (read-only in dashboard). The `api_key` is used for authentication. Submissions are rate-limited to 30 req/min per IP per API key.
