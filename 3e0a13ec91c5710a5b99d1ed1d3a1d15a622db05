@@ -1,0 +1,28 @@
+services/frontend/src/pages/SchemaBuilder.tsx
+  775b1b1ff7543f60 38-39,41-48,51-59,118-124,145-149
+services/backend/src/http/routes/schema.ts
+  775b1b1ff7543f60 62-71,111-118
+services/frontend/src/pages/AppDetail.tsx
+  775b1b1ff7543f60 2,70-77,89-99,139,145,147-151,153-154,156,159,176,189-195,246-248,263,267,382-383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "3e0a13ec91c5710a5b99d1ed1d3a1d15a622db05",
+  "prompts": {
+    "775b1b1ff7543f60": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "88888118-d4ec-4e76-85cf-9e86951fa44e",
+        "model": "claude-4.5-sonnet"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 137,
+      "total_deletions": 68,
+      "accepted_lines": 99,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/ba9d840434f37431f4e52e280c5bab4819b5e62722af77997cfbcc8e00b90922"
+    }
+  }
+}
