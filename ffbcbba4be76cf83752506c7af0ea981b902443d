@@ -1,0 +1,26 @@
+README.md
+  775b1b1ff7543f60 26-32
+start.sh
+  775b1b1ff7543f60 75,78-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "ffbcbba4be76cf83752506c7af0ea981b902443d",
+  "prompts": {
+    "775b1b1ff7543f60": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "88888118-d4ec-4e76-85cf-9e86951fa44e",
+        "model": "claude-4.5-sonnet"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 13,
+      "total_deletions": 9,
+      "accepted_lines": 10,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/f7cb2f0178a2d1516d3181bd9d9ca5d72213c9aa8d6479d098eb4755993edd78"
+    }
+  }
+}
