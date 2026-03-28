@@ -1,0 +1,23 @@
+services/backend/src/core/tables.ts
+  775b1b1ff7543f60 1-90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "9c80cfcb852f88721b0996097a4218ca8c24a22e",
+  "prompts": {
+    "775b1b1ff7543f60": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "88888118-d4ec-4e76-85cf-9e86951fa44e",
+        "model": "claude-4.5-haiku"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 125,
+      "total_deletions": 35,
+      "accepted_lines": 90,
+      "overriden_lines": 0
+    }
+  }
+}
