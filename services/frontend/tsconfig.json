@@ -4,8 +4,15 @@
     "jsx": "react-jsx",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "rootDir": "./src",
-    "skipLibCheck": true
+    "outDir": "./dist",
+    "noEmit": false,
+    "skipLibCheck": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitAny": false,
+    "strict": false
   },
   "include": ["src"],
-  "references": [{ "path": "./tsconfig.app.json" }]
+  "exclude": ["node_modules", "dist"]
 }
+

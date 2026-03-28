@@ -162,7 +162,7 @@ export default function Apps() {
             {apps.map((app) => (
               <button
                 key={app.id}
-                onClick={() => navigate(`/apps/${app.id}`)}
+                onClick={() => navigate(`/apps/${app.slug}`)}
                 className="w-full text-left bg-elevated rounded-xl px-5 py-4 flex items-center justify-between group transition-all hover:bg-surface relative overflow-hidden"
                 style={{ border: '1px solid rgba(139,92,246,0.12)' }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(139,92,246,0.28)'}

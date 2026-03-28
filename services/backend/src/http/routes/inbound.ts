@@ -1,45 +1,46 @@
 import { randomUUID } from 'crypto';
-import { z } from 'zod';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import db from '../../core/db.js';
 import logger from '../../core/logger.js';
-import { cacheGet, cacheSet } from '../../core/cache.js';
+import {
+  getZodSchema,
+  getAppMetadata,
+  initializeCacheResetTimer,
+} from '../../core/caches.js';
+import { SchemaField } from '../../core/schema-builder.js';
+import { getSchemaFieldsTableName, getSubmissionsTableName } from '../../core/slug.js';
+import { ensureAppTables } from '../../core/tables.js';
 import config from '../../core/config.js';
 
 const MAX_BODY_BYTES = 16 * 1024; // 16KB
 const MAX_FIELDS = 50;
-const MAX_STR_LEN = 10_000;
 
 const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|localhost)/;
 
-interface SchemaField {
-  name: string;
-  type: string;
-  required: boolean;
-  unique: boolean;
-  compound_key?: string;
-}
-
-interface App {
-  id: string;
-  api_key: string;
-  allowed_origins: string;
-}
-
-async function fetchGeo(ip: string, submissionId: string): Promise<void> {
+async function fetchGeo(ip: string, submissionId: string, slug: string): Promise<void> {
   if (!ip || PRIVATE_IP_RE.test(ip)) return;
   try {
+    const tableName = getSubmissionsTableName(slug);
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 3000);
-    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,isp`, { signal: ctrl.signal });
+    const res = await fetch(
+      `http://ip-api.com/json/${ip}?fields=status,country,regionName,city,isp`,
+      { signal: ctrl.signal }
+    );
     clearTimeout(timer);
     if (!res.ok) return;
-    const geo = (await res.json()) as { status: string; country?: string; regionName?: string; city?: string; isp?: string };
+    const geo = (await res.json()) as {
+      status: string;
+      country?: string;
+      regionName?: string;
+      city?: string;
+      isp?: string;
+    };
     if (geo.status !== 'success') return;
-    const sub = (await db.findOne('submissions', { id: submissionId })) as { meta?: string } | null;
+    const sub = (await db.findOne(tableName, { id: submissionId })) as { meta?: string } | null;
     if (!sub) return;
     const existing = sub.meta ? JSON.parse(sub.meta) : {};
-    await db.exec('UPDATE submissions SET meta = ? WHERE id = ?', [
+    await db.exec(`UPDATE ${tableName} SET meta = ? WHERE id = ?`, [
       JSON.stringify({
         ...existing,
         geo: { city: geo.city, region: geo.regionName, country: geo.country, isp: geo.isp },
@@ -51,33 +52,12 @@ async function fetchGeo(ip: string, submissionId: string): Promise<void> {
   }
 }
 
-const TYPE_VALIDATORS: Record<string, () => z.ZodTypeAny> = {
-  string: () => z.string().min(1).max(MAX_STR_LEN),
-  email: () => z.string().email().max(MAX_STR_LEN),
-  number: () => z.coerce.number(),
-  boolean: () => z.coerce.boolean(),
-  url: () => z.string().url().max(MAX_STR_LEN),
-  date: () =>
-    z
-      .string()
-      .max(MAX_STR_LEN)
-      .refine((v) => !isNaN(Date.parse(v)), { message: 'Invalid date' }),
-};
-
-function buildZodSchema(fields: SchemaField[]): z.ZodType<Record<string, unknown>> {
-  const shape: Record<string, z.ZodTypeAny> = {};
-  for (const field of fields) {
-    const validator = TYPE_VALIDATORS[field.type] ?? TYPE_VALIDATORS.string;
-    let schema = validator();
-    if (!field.required) schema = schema.optional();
-    shape[field.name] = schema;
-  }
-  return z.object(shape).strict();
-}
-
 export async function registerInboundRoutes(server: FastifyInstance): Promise<void> {
+  // Initialize cache reset timer (hourly)
+  initializeCacheResetTimer(logger);
+
   // Handle CORS preflight for the public endpoint
-  server.options('/s/:api_key', async (_request, reply) => {
+  server.options('/s/:slug', async (_request, reply) => {
     const origin = _request.headers.origin;
     reply.header('Access-Control-Allow-Origin', origin || '*');
     reply.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -86,18 +66,18 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
     return reply.status(204).send();
   });
 
-  // POST /s/:api_key — public inbound submission endpoint
-  server.post<{ Params: { api_key: string }; Body: Record<string, unknown> }>(
-    '/s/:api_key',
+  // POST /s/:slug — public inbound submission endpoint
+  server.post<{ Params: { slug: string }; Body: Record<string, unknown> }>(
+    '/s/:slug',
     {
       config: {
         rateLimit: {
           max: 30,
           timeWindow: '1 minute',
-          keyGenerator: (req) => `${req.ip}:${req.params.api_key}`,
+          keyGenerator: (req: any) => `${req.ip}:${req.params.slug}`,  // Rate limit by IP + slug
           errorResponseBuilder: (_req, reply) => {
             reply.statusCode = 200;
-            return { ok: true };
+            return { ok: true };  // Silent fail for rate-limited requests
           },
         },
       },
@@ -110,7 +90,7 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
       reply.header('Access-Control-Allow-Credentials', 'true');
 
       try {
-        // Body size guard — silently ok if too large, just drop it
+        // Body size guard — silently ok if too large
         const contentLength = parseInt(request.headers['content-length'] || '0', 10);
         if (contentLength > MAX_BODY_BYTES) {
           if (config.debugInbound && contentLength > MAX_BODY_BYTES) {
@@ -120,7 +100,7 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
           return reply.status(200).send({ ok: true });
         }
 
-        const body = request.body;
+        const body = request.body as Record<string, unknown>;
 
         // Malformed / missing body — silently ok
         if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -150,55 +130,53 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
         // Strip honeypot field before validation
         const { _hp, ...payload } = body as Record<string, unknown>;
 
-        // Look up app (TTL-cached, 60s) — silently ok if not found
-        const apiKey = request.params.api_key;
-        const appCacheKey = `app:${apiKey}`;
-        let app = cacheGet<App>(appCacheKey);
-        if (!app) {
-          app = (await db.findOne('apps', { api_key: apiKey })) as App | null;
-          if (app) cacheSet(appCacheKey, app);
-        }
-        if (!app) {
-          if (config.debugInbound && !app) {
-            logger.warn({ apiKey }, 'Inbound: app not found');
+        // Get app metadata (cached)
+        const slug = (request.params as any).slug;
+        const appMetadata = await getAppMetadata(slug, async (s) => {
+          return await db.findOne('apps', { slug: s });
+        });
+
+        if (!appMetadata) {
+          if (config.debugInbound) {
+            logger.warn({ slug }, 'Inbound: app not found');
             return reply.status(404).send({ ok: false, error: 'App not found' });
           }
           return reply.status(200).send({ ok: true });
         }
 
         // Per-app CORS origin check — silently ok (don't expose origin config)
-        const allowedOrigins = JSON.parse(app.allowed_origins || '[]') as string[];
-        if (allowedOrigins.length > 0 && origin && !allowedOrigins.includes(origin)) {
-          if (config.debugInbound && allowedOrigins.length > 0 && origin && !allowedOrigins.includes(origin)) {
-            logger.warn({ origin, allowedOrigins }, 'Inbound: origin not allowed');
+        if (appMetadata.allowed_origins.length > 0 && origin && !appMetadata.allowed_origins.includes(origin)) {
+          if (config.debugInbound && appMetadata.allowed_origins.length > 0 && origin && !appMetadata.allowed_origins.includes(origin)) {
+            logger.warn({ origin, allowedOrigins: appMetadata.allowed_origins }, 'Inbound: origin not allowed');
             return reply.status(403).send({ ok: false, error: 'Origin not allowed' });
           }
           return reply.status(200).send({ ok: true });
         }
 
-        // Load schema (TTL-cached, 60s)
-        const schemaCacheKey = `schema:${app.id}`;
-        let fields = cacheGet<SchemaField[]>(schemaCacheKey);
-        if (!fields) {
-          fields = (await db.find('schema_fields', { app_id: app.id }, {
+        // Ensure app tables exist (idempotent)
+        await ensureAppTables(db, slug);
+
+        // Get schema (cached)
+        const schemaTable = getSchemaFieldsTableName(slug);
+        const zodSchema = await getZodSchema(slug, async () => {
+          return (await db.find(schemaTable, {}, {
             orderBy: 'position',
             order: 'ASC',
           })) as SchemaField[];
-          cacheSet(schemaCacheKey, fields);
-        }
+        });
 
-        // No schema yet — silently ok
+        // No schema yet — silently ok if no fields were defined
+        const fields = await db.find(schemaTable, {});
         if (fields.length === 0) {
-          if (config.debugInbound && fields.length === 0) {
-            logger.warn({ appId: app.id }, 'Inbound: no schema fields');
+          if (config.debugInbound) {
+            logger.warn({ slug }, 'Inbound: no schema fields');
             return reply.status(400).send({ ok: false, error: 'No schema fields' });
           }
-          return reply.status(200).send({ ok: true });
+          // Allow submission anyway (empty schema accepts any object in strict mode)
         }
 
-        // Validate with Zod — silently ok on failure (caller gets no hint)
-        const schema = buildZodSchema(fields);
-        const result = schema.safeParse(payload);
+        // Validate with Zod — silently ok on failure
+        const result = zodSchema.safeParse(payload);
         if (!result.success) {
           if (config.debugInbound && !result.success) {
             logger.warn({ issues: result.error.issues }, 'Inbound: schema validation failed');
@@ -211,30 +189,36 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
 
         // Idempotency key check
         const idempotencyKey = (request.headers['idempotency-key'] as string) || null;
+        const submissionsTable = getSubmissionsTableName(slug);
+
         if (idempotencyKey) {
-          const existing = await db.findOne('submissions', { idempotency_key: idempotencyKey });
+          const existing = await db.findOne(submissionsTable, { idempotency_key: idempotencyKey });
           if (existing) {
             if (config.debugInbound && idempotencyKey && existing) {
               logger.info({ idempotencyKey, existingId: (existing as { id: string }).id }, 'Inbound: idempotency key hit');
-              return reply.status(409).send({ ok: false, error: 'Duplicate idempotency key', id: (existing as { id: string }).id });
+              return reply
+                .status(409)
+                .send({ ok: false, error: 'Duplicate idempotency key', id: (existing as { id: string }).id });
             }
             return reply.status(200).send({ ok: true, id: (existing as { id: string }).id });
           }
         }
 
-        // Individual unique field checks — duplicates bump a counter, always return ok
-        for (const field of fields) {
+        // Individual unique field checks — duplicates bump a counter
+        const fieldsArray = (await db.find(schemaTable, {})) as SchemaField[];
+
+        for (const field of fieldsArray) {
           if (!field.unique || field.compound_key) continue;
           const value = validatedData[field.name];
           if (value === undefined) continue;
 
-          const hit = await db.exec(`SELECT id FROM submissions WHERE app_id = ? AND json_extract(data, '$.${field.name}') = ? LIMIT 1`, [
-            app.id,
-            String(value),
-          ]);
-          const orig = (hit?.rows?.[0] as { id: string } | undefined);
+          const hit = await db.exec(
+            `SELECT id FROM ${submissionsTable} WHERE json_extract(data, '$.${field.name}') = ? LIMIT 1`,
+            [String(value)]
+          );
+          const orig = ((hit as any)?.rows?.[0] as { id: string } | undefined);
           if (orig) {
-            await db.exec('UPDATE submissions SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?', [
+            await db.exec(`UPDATE ${submissionsTable} SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?`, [
               Math.floor(Date.now() / 1000),
               orig.id,
             ]);
@@ -248,7 +232,7 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
 
         // Compound unique checks
         const compoundGroups: Record<string, SchemaField[]> = {};
-        for (const field of fields) {
+        for (const field of fieldsArray) {
           if (!field.compound_key) continue;
           if (!compoundGroups[field.compound_key]) compoundGroups[field.compound_key] = [];
           compoundGroups[field.compound_key].push(field);
@@ -258,18 +242,21 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
           if (present.length === 0) continue;
           const conditions = present.map((f) => `json_extract(data, '$.${f.name}') = ?`);
           const params = present.map((f) => String(validatedData[f.name]));
-          const hit = await db.exec(`SELECT id FROM submissions WHERE app_id = ? AND ${conditions.join(' AND ')} LIMIT 1`, [app.id, ...params]);
-          const orig = (hit?.rows?.[0] as { id: string } | undefined);
+          const hit = await db.exec(`SELECT id FROM ${submissionsTable} WHERE ${conditions.join(' AND ')} LIMIT 1`, params);
+          const orig = ((hit as any)?.rows?.[0] as { id: string } | undefined);
           if (orig) {
-            await db.exec('UPDATE submissions SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?', [
+            await db.exec(`UPDATE ${submissionsTable} SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?`, [
               Math.floor(Date.now() / 1000),
               orig.id,
             ]);
             if (config.debugInbound) {
               logger.info({ group: groupFields.map((f) => f.name), present }, 'Inbound: compound unique duplicate');
-              return reply
-                .status(409)
-                .send({ ok: false, error: 'Duplicate compound unique group', group: groupFields.map((f) => f.name), present });
+              return reply.status(409).send({
+                ok: false,
+                error: 'Duplicate compound unique group',
+                group: groupFields.map((f) => f.name),
+                present,
+              });
             }
             return reply.status(200).send({ ok: true });
           }
@@ -284,9 +271,8 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
           referrer: request.headers['referer'] || request.headers['referrer'] || null,
         });
 
-        await db.insert('submissions', {
+        await db.insert(submissionsTable, {
           id,
-          app_id: app.id,
           data: JSON.stringify(validatedData),
           idempotency_key: idempotencyKey,
           ip: request.ip,
@@ -294,11 +280,11 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
           created_at: now,
         });
 
-        logger.info({ appId: app.id, submissionId: id }, 'Submission received');
+        logger.info({ slug, submissionId: id }, 'Submission received');
         reply.status(200).send({ ok: true, id });
 
         // Fire-and-forget geo enrichment (doesn't block response)
-        fetchGeo(request.ip as string, id);
+        fetchGeo(request.ip as string, id, slug);
       } catch (err) {
         logger.error({ err }, 'Unhandled error in submission handler');
         reply.status(500).send({ ok: false, error: 'Internal server error' });

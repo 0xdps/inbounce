@@ -18,7 +18,7 @@ export async function registerAuthRoutes(server: FastifyInstance): Promise<void>
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { key } = request.body || {};
+      const { key } = (request.body as any) || {};
       if (!key || typeof key !== 'string') {
         return reply.status(400).send({ error: 'Missing or invalid key' });
       }

@@ -2,10 +2,12 @@ import { randomUUID } from 'crypto';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import db from '../../core/db.js';
 import { authHook } from '../middleware/auth.js';
-import { cacheDel } from '../../core/cache.js';
+import { SchemaField } from '../../core/schema-builder.js';
+import { getSchemaFieldsTableName } from '../../core/slug.js';
+import { invalidateSchemaCacheForApp } from '../../core/caches.js';
 
 const VALID_TYPES = new Set(['string', 'email', 'number', 'boolean', 'url', 'date']);
-const RESERVED_NAMES = new Set(['id', 'app_id', 'data', 'idempotency_key', 'ip', 'created_at']);
+const RESERVED_NAMES = new Set(['id', 'data', 'idempotency_key', 'ip', 'created_at']);
 const FIELD_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 interface FieldInput {
@@ -15,15 +17,6 @@ interface FieldInput {
   unique?: boolean;
   position?: number;
   compound_key?: string;
-}
-
-interface SchemaField extends FieldInput {
-  id: string;
-  app_id: string;
-  required: number;
-  unique: number;
-  position: number;
-  compound_key: string | null;
 }
 
 function validateFields(fields: unknown): string | null {
@@ -51,40 +44,46 @@ function validateFields(fields: unknown): string | null {
 }
 
 export async function registerSchemaRoutes(server: FastifyInstance): Promise<void> {
-  // GET /api/apps/:id/schema
-  server.get<{ Params: { id: string } }>(
-    '/api/apps/:id/schema',
+  // GET /api/apps/:slug/schema
+  server.get<{ Params: { slug: string } }>(
+    '/api/apps/:slug/schema',
     { preHandler: [authHook] },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const app = await db.findById('apps', request.params.id);
+    async (request: FastifyRequest<{ Params: { slug: string } }>, reply: FastifyReply) => {
+      const app = await db.findOne('apps', { slug: (request.params as any).slug });
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
-      const fields = (await db.find('schema_fields', { app_id: app.id }, {
-        orderBy: 'position',
-        order: 'ASC',
-      })) as SchemaField[];
+      const schemaTable = getSchemaFieldsTableName((request.params as any).slug);
+      const fields = (await db.find(
+        schemaTable,
+        {},
+        {
+          orderBy: 'position',
+          order: 'ASC',
+        }
+      )) as SchemaField[];
       return fields;
     }
   );
 
-  // PUT /api/apps/:id/schema
-  server.put<{ Params: { id: string }; Body: { fields: FieldInput[] } }>(
-    '/api/apps/:id/schema',
+  // PUT /api/apps/:slug/schema
+  server.put<{ Params: { slug: string }; Body: { fields: FieldInput[] } }>(
+    '/api/apps/:slug/schema',
     { preHandler: [authHook] },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const app = await db.findById('apps', request.params.id);
+    async (request: FastifyRequest<{ Params: { slug: string }; Body: { fields: FieldInput[] } }>, reply: FastifyReply) => {
+      const app = await db.findOne('apps', { slug: (request.params as any).slug });
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
-      const { fields } = request.body || {};
+      const { fields } = (request.body as any) || {};
       const error = validateFields(fields);
       if (error) return reply.status(400).send({ error });
 
+      const schemaTable = getSchemaFieldsTableName((request.params as any).slug);
+
       // Delete existing fields and replace
-      await db.delete('schema_fields', { app_id: app.id });
+      await db.delete(schemaTable, {});
 
       const rows = (fields as FieldInput[]).map((f, i) => ({
         id: randomUUID(),
-        app_id: app.id,
         name: f.name,
         type: f.type,
         required: f.required ? 1 : 0,
@@ -94,10 +93,12 @@ export async function registerSchemaRoutes(server: FastifyInstance): Promise<voi
       }));
 
       if (rows.length > 0) {
-        await db.insertMany('schema_fields', rows);
+        await db.insertMany(schemaTable, rows);
       }
 
-      cacheDel(`schema:${app.id}`);
+      // Invalidate schema cache immediately
+      invalidateSchemaCacheForApp((request.params as any).slug);
+
       return rows;
     }
   );

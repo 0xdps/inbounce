@@ -7,6 +7,7 @@ services/backend/node_modules/
 services/frontend/node_modules/
 
 # Build output
+services/backend/dist/
 services/frontend/dist/
 
 # Environment
@@ -101,8 +102,8 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
 .output
+
 
 # Gatsby files
 .cache/

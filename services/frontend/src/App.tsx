@@ -59,7 +59,7 @@ export default function App(): ReactNode {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute><Navigate to="/apps" replace /></ProtectedRoute>} />
           <Route path="/apps" element={<ProtectedRoute><Apps /></ProtectedRoute>} />
-          <Route path="/apps/:id" element={<ProtectedRoute><AppDetail /></ProtectedRoute>} />
+          <Route path="/apps/:slug" element={<ProtectedRoute><AppDetail /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>

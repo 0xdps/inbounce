@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyRequest, FastifyReply } from 'fastify';
 import { SignJWT, jwtVerify } from 'jose';
 import { timingSafeEqual } from 'crypto';
 import config from '../../core/config.js';
@@ -21,7 +21,7 @@ export async function createSession(reply: FastifyReply): Promise<string> {
   reply.setCookie(COOKIE_NAME, token, {
     httpOnly: true,
     secure: config.isProduction(),
-    sameSite: 'Lax',
+    sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 24 * 7,
   });
@@ -57,10 +57,8 @@ export async function authHook(request: FastifyRequest, reply: FastifyReply): Pr
   }
 }
 
-declare global {
-  namespace FastifyInstance {
-    interface FastifyRequest {
-      user?: unknown;
-    }
+declare module 'fastify' {
+  interface FastifyRequest {
+    user?: unknown;
   }
 }

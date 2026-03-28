@@ -39,9 +39,9 @@ function inputType(type) {
   return 'text';
 }
 
-function EmbedSnippet({ apiKey, fields = [] }) {
+function EmbedSnippet({ slug, fields = [] }) {
   const [mode, setMode] = useState('fetch');
-  const url = `${window.location.origin}/s/${apiKey}`;
+  const url = `${window.location.origin}/s/${slug}`;
 
   const bodyFields = fields.length > 0
     ? fields.map(f => {
@@ -248,8 +248,41 @@ export default function AppDetail() {
                     <dt className="text-text-muted text-xs">Submissions</dt>
                     <dd className="text-text-primary text-xs">{app.submission_count ?? '—'}</dd>
                   </div>
+                  <div className="flex justify-between items-center">
+                    <dt className="text-text-muted text-xs">Slug</dt>
+                    <dd className="flex items-center gap-2">
+                      <span className="text-text-primary text-xs font-mono">{app.slug}</span>
+                      <CopyButton text={app.slug} className="ml-1" />
+                    </dd>
+                  </div>
                 </dl>
               )}
+            </div>
+
+            {/* Slug */}
+            <div className="bg-elevated rounded-xl p-5" style={{ border: '1px solid rgba(139,92,246,0.12)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-text-primary font-semibold text-sm">Public identifier</h2>
+              </div>
+              <div className="bg-overlay rounded-lg px-3 py-3 font-mono text-xs text-text-secondary break-all" style={{ border: '1px solid rgba(139,92,246,0.1)' }}>
+                <div className="flex items-center justify-between gap-2">
+                  <span>{app.slug}</span>
+                  <CopyButton text={app.slug} />
+                </div>
+              </div>
+              <p className="text-text-muted text-xs mt-2">Use this slug for your public submission endpoint: <span className="font-mono">/s/{app.slug}</span></p>
+            </div>
+
+            {/* Endpoint */}
+            <div className="bg-elevated rounded-xl p-5" style={{ border: '1px solid rgba(139,92,246,0.12)' }}>
+              <h2 className="text-text-primary font-semibold text-sm mb-3">Submission endpoint</h2>
+              <div className="bg-overlay rounded-lg px-3 py-3 font-mono text-xs text-text-secondary break-all" style={{ border: '1px solid rgba(139,92,246,0.1)' }}>
+                <div className="flex items-center justify-between gap-2">
+                  <span>{`${window.location.origin}/s/${app.slug}`}</span>
+                  <CopyButton text={`${window.location.origin}/s/${app.slug}`} />
+                </div>
+              </div>
+              <p className="text-text-muted text-xs mt-2">POST JSON data to this endpoint to submit form responses.</p>
             </div>
 
             {/* API Key */}
@@ -278,7 +311,7 @@ export default function AppDetail() {
             </div>
 
             {/* Embed snippet */}
-            <EmbedSnippet apiKey={app.api_key} fields={schema} />
+            <EmbedSnippet slug={app.slug} fields={schema} />
 
             {/* Danger zone */}
             <div className="bg-elevated rounded-xl p-5" style={{ border: '1px solid rgba(239,68,68,0.2)' }}>

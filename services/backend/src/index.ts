@@ -1,12 +1,14 @@
 import config from './core/config.js';
 import logger from './core/logger.js';
 import { initializeSchema } from './core/db.js';
-import server from './http/server.js';
+import createServer from './http/server.js';
 
 async function main(): Promise<void> {
   try {
     await initializeSchema();
     logger.info('✓ Database schema initialized');
+
+    const server = await createServer();
 
     await server.listen({ port: config.port, host: '0.0.0.0' });
     logger.info({ port: config.port }, '✓ Server listening');
