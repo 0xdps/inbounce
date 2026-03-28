@@ -7,7 +7,9 @@
   "scripts": {
     "dev:local": "npm run backend:dev & npm run frontend:dev",
     "backend:dev": "npm --prefix services/backend run dev",
-    "frontend:dev": "npm --prefix services/frontend run dev"
+    "frontend:dev": "npm --prefix services/frontend run dev",
+    "build": "npm --prefix services/backend run build && npm --prefix services/frontend run build",
+    "type-check": "npm --prefix services/backend run type-check && npm --prefix services/frontend run type-check"
   },
   "author": "Devendra Pratap <dps.manit@gmail.com>",
   "license": "ISC",

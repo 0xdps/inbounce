@@ -111,7 +111,7 @@ docker compose up
 | `GET` | `/api/apps` | Session | List apps |
 | `POST` | `/api/apps` | Session | Create app |
 | `GET` | `/api/apps/:id` | Session | Get app + schema |
-| `PATCH` | `/api/apps/:id` | Session | Update app |
+| `PUT` | `/api/apps/:id` | Session | Update app |
 | `DELETE` | `/api/apps/:id` | Session | Delete app |
 | `GET` | `/api/apps/:id/submissions` | Session | List submissions |
 | `GET` | `/api/apps/:id/submissions/distribution` | Session | Field value distribution |

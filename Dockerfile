@@ -9,34 +9,33 @@ RUN cd services/frontend && npm install
 COPY services/backend/package*.json ./services/backend/
 RUN cd services/backend && npm install
 
-# Copy and build frontend
+# Copy frontend source and build
 COPY services/frontend/src        ./services/frontend/src
 COPY services/frontend/public     ./services/frontend/public
 COPY services/frontend/index.html ./services/frontend/
-COPY services/frontend/vite.config.js     ./services/frontend/
+COPY services/frontend/vite.config.ts     ./services/frontend/
+COPY services/frontend/tsconfig.json ./services/frontend/
 COPY services/frontend/postcss.config.js  ./services/frontend/
 COPY services/frontend/tailwind.config.js ./services/frontend/
 RUN npm --prefix services/frontend run build
 
-# Copy backend source
-COPY services/backend/core  ./services/backend/core
-COPY services/backend/http  ./services/backend/http
-COPY services/backend/index.js      ./services/backend/
-COPY services/backend/package.json  ./services/backend/
+# Build backend TypeScript
+COPY services/backend/src ./services/backend/src
+COPY services/backend/tsconfig.json ./services/backend/
+RUN npm --prefix services/backend run build
 
-# Dev stage — backend hot reload via node --watch
+# Dev stage — backend hot reload via tsx
 FROM node:22-alpine AS dev
 WORKDIR /app
 RUN apk add --no-cache curl
 
 COPY --from=builder /app/services/backend/node_modules ./services/backend/node_modules
-COPY services/backend/core    ./services/backend/core
-COPY services/backend/http    ./services/backend/http
-COPY services/backend/index.js     ./services/backend/
-COPY services/backend/package.json ./services/backend/
+COPY services/backend/src       ./services/backend/src
+COPY services/backend/tsconfig.json ./services/backend/
+COPY services/backend/package.json  ./services/backend/
 
 EXPOSE 3000
-CMD ["node", "--watch", "services/backend/index.js"]
+CMD ["npm", "--prefix", "services/backend", "run", "dev"]
 
 # Production stage — Caddy + Node
 FROM caddy:2-alpine AS caddy-bin
@@ -48,10 +47,8 @@ WORKDIR /app
 RUN mkdir -p /usr/share/caddy
 
 COPY --from=builder /app/services/backend/node_modules ./services/backend/node_modules
-COPY --from=builder /app/services/backend/core  ./services/backend/core
-COPY --from=builder /app/services/backend/http  ./services/backend/http
-COPY --from=builder /app/services/backend/index.js     ./services/backend/
-COPY --from=builder /app/services/backend/package.json ./services/backend/
+COPY --from=builder /app/services/backend/dist    ./services/backend/dist
+COPY services/backend/package.json  ./services/backend/
 
 COPY --from=builder /app/services/frontend/dist /usr/share/caddy
 

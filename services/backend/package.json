@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "Backend API for Inbounce — form backend as a service",
   "type": "module",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx --watch src/index.ts",
+    "type-check": "tsc --noEmit"
   },
   "author": "Devendra Pratap <dps.manit@gmail.com>",
   "license": "ISC",
@@ -29,7 +31,10 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/node": "^20.11.19",
     "eslint": "^9.39.1",
-    "prettier": "^3.6.2"
+    "prettier": "^3.6.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
   }
 }
