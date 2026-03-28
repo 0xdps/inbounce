@@ -35,12 +35,28 @@ export default function SchemaBuilder({ appId }) {
   const [hasSubmissions, setHasSubmissions] = useState(false);
 
   useEffect(() => {
-    Promise.all([api.getSchema(appId), api.getSubmissions(appId, { limit: 1 })])
-      .then(([schemaFields, subs]) => {
-        setFields(schemaFields.map((f) => ({ ...f, _key: f.id })));
-        setHasSubmissions(subs.total > 0);
+    // Load schema first
+    api.getSchema(appId)
+      .then((schemaFields) => {
+        if (Array.isArray(schemaFields)) {
+          setFields(schemaFields.map((f) => ({ ...f, _key: f.id })));
+        } else {
+          setFields([]);
+        }
+      })
+      .catch((err) => {
+        setError(err.message || 'Failed to load schema');
       })
       .finally(() => setLoading(false));
+
+    // Load submissions count separately (don't block schema display)
+    api.getSubmissions(appId, { limit: '1' })
+      .then((subs) => {
+        setHasSubmissions(subs.total > 0);
+      })
+      .catch(() => {
+        // Ignore errors for submissions count
+      });
   }, [appId]);
 
   function addField() {
@@ -99,6 +115,13 @@ export default function SchemaBuilder({ appId }) {
 
   return (
     <form onSubmit={save}>
+      {error && !saving && (
+        <div className="flex items-start gap-2.5 rounded-xl px-4 py-3 mb-5" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)' }}>
+          <AlertTriangle size={13} className="text-danger mt-0.5 shrink-0" />
+          <p className="text-danger text-xs leading-relaxed">{error}</p>
+        </div>
+      )}
+      
       {hasSubmissions && (
         <div className="flex items-start gap-2.5 rounded-xl px-4 py-3 mb-5" style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.18)' }}>
           <AlertTriangle size={13} className="text-warning mt-0.5 shrink-0" />
@@ -119,11 +142,11 @@ export default function SchemaBuilder({ appId }) {
           </div>
         ) : (
           fields.map((field) => (
-            <div
-              key={field._key}
-              className="rounded-xl p-4"
-              style={{ background: '#0d0d1b', border: '1px solid rgba(139,92,246,0.14)' }}
-            >
+              <div
+                key={field._key}
+                className="rounded-xl p-4"
+                style={{ background: '#0d0d1b', border: '1px solid rgba(139,92,246,0.14)' }}
+              >
               {/* Row 1: field name + delete */}
               <div className="flex items-center gap-3 mb-3">
                 <div

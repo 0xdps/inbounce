@@ -2,7 +2,6 @@ import { randomUUID } from 'crypto';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import db from '../../core/db.js';
 import { authHook } from '../middleware/auth.js';
-import { SchemaField } from '../../core/schema-builder.js';
 import { getSchemaFieldsTableName } from '../../core/slug.js';
 import { invalidateSchemaCacheForApp } from '../../core/caches.js';
 
@@ -60,8 +59,16 @@ export async function registerSchemaRoutes(server: FastifyInstance): Promise<voi
           orderBy: 'position',
           order: 'ASC',
         }
-      )) as unknown as SchemaField[];
-      return fields;
+      )) as unknown as any[];
+      
+      // Transform SQLite integers to booleans for required/unique
+      const transformed = fields.map(f => ({
+        ...f,
+        required: !!f.required,
+        unique: !!f.unique,
+      }));
+      
+      return transformed;
     }
   );
 
@@ -101,7 +108,14 @@ export async function registerSchemaRoutes(server: FastifyInstance): Promise<voi
       // Invalidate schema cache immediately
       invalidateSchemaCacheForApp((request.params as any).slug);
 
-      return rows;
+      // Transform response to match frontend expectations (booleans instead of 0/1)
+      const transformed = rows.map(r => ({
+        ...r,
+        required: !!r.required,
+        unique: !!r.unique,
+      }));
+
+      return transformed;
     }
   );
 }

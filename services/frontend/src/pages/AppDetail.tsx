@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Copy, Check, RefreshCw, Trash2, Loader, Inbox, Braces, Settings } from 'lucide-react';
 import Layout from '../components/Layout.js';
 import SchemaBuilder from './SchemaBuilder.js';
@@ -67,6 +67,14 @@ function EmbedSnippet({ apiKey, fields = [] }) {
       }).join('\n')
     : '    // define schema fields in the Schema tab';
 
+  const curlBodyFields = fields.length > 0
+    ? fields.map((f, i, arr) => {
+        const ph = (TYPE_PLACEHOLDER[f.type] ?? TYPE_PLACEHOLDER.string)(f.name);
+        const comma = i < arr.length - 1 ? ',' : '';
+        return `    "${f.name}": ${ph}${comma}`;
+      }).join('\n')
+    : '';
+
   const fetchSnippet = `await fetch('${url}', {
   method: 'POST',
   headers: {
@@ -77,6 +85,18 @@ function EmbedSnippet({ apiKey, fields = [] }) {
 ${bodyFields}
   }),
 });`;
+
+  const curlSnippet = fields.length > 0
+    ? `curl -X POST '${url}' \\
+  -H 'Content-Type: application/json' \\
+  -H 'Authorization: Bearer ${apiKey}' \\
+  -d '{
+${curlBodyFields}
+  }'`
+    : `curl -X POST '${url}' \\
+  -H 'Content-Type: application/json' \\
+  -H 'Authorization: Bearer ${apiKey}' \\
+  -d '{}'`;
 
   const formInputs = fields.length > 0
     ? fields.map(f => {
@@ -116,23 +136,27 @@ document.getElementById('myForm').addEventListener('submit', async (e) => {
 });
 </script>`;
 
-  const active = mode === 'fetch' ? fetchSnippet : formSnippet;
+  const active = mode === 'fetch' ? fetchSnippet : mode === 'curl' ? curlSnippet : formSnippet;
 
   return (
     <div className="bg-overlay rounded-xl p-4" style={{ border: '1px solid rgba(139,92,246,0.12)' }}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-text-secondary text-xs font-semibold">Embed snippet</span>
+          <span className="text-text-secondary text-xs font-semibold">Code snippet</span>
           <div className="flex items-center gap-0.5 bg-surface border border-border rounded p-0.5">
-            {['fetch', 'html'].map(m => (
+            {[
+              { id: 'fetch', label: 'fetch' },
+              { id: 'curl', label: 'curl' },
+              { id: 'html', label: 'html' }
+            ].map(m => (
               <button
-                key={m}
-                onClick={() => setMode(m)}
+                key={m.id}
+                onClick={() => setMode(m.id)}
                 className={`px-2 py-0.5 rounded text-xs font-mono transition-colors ${
-                  mode === m ? 'bg-overlay text-text-primary' : 'text-text-muted hover:text-text-secondary'
+                  mode === m.id ? 'bg-overlay text-text-primary' : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
-                {m === 'fetch' ? 'JS fetch' : 'HTML form'}
+                {m.label}
               </button>
             ))}
           </div>
@@ -149,9 +173,9 @@ const TABS = ['Submissions', 'Schema', 'Setup'];
 export default function AppDetail() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('Submissions');
   const [keyVisible, setKeyVisible] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -161,6 +185,14 @@ export default function AppDetail() {
   const [editOrigins, setEditOrigins] = useState('');
   const [saving, setSaving] = useState(false);
   const [schema, setSchema] = useState([]);
+
+  // Get tab from URL, default to 'submissions'
+  const tab = searchParams.get('tab') || 'submissions';
+
+  // Function to change tab and update URL
+  const setTab = (newTab: string) => {
+    setSearchParams({ tab: newTab.toLowerCase() });
+  };
 
   useEffect(() => {
     Promise.all([api.getApp(slug), api.getSchema(slug)])
@@ -211,9 +243,9 @@ export default function AppDetail() {
   }
 
   const navItems = [
-    { label: 'Submissions', Icon: Inbox,   active: tab === 'Submissions', onClick: () => setTab('Submissions') },
-    { label: 'Schema',      Icon: Braces,  active: tab === 'Schema',      onClick: () => setTab('Schema')      },
-    { label: 'Setup',       Icon: Settings, active: tab === 'Setup',      onClick: () => setTab('Setup')       },
+    { label: 'Submissions', Icon: Inbox,   active: tab === 'submissions', onClick: () => setTab('submissions') },
+    { label: 'Schema',      Icon: Braces,  active: tab === 'schema',      onClick: () => setTab('schema')      },
+    { label: 'Setup',       Icon: Settings, active: tab === 'setup',       onClick: () => setTab('setup')       },
   ];
 
   if (loading) {
@@ -228,11 +260,11 @@ export default function AppDetail() {
   }
 
   return (
-    <Layout appName={app.name} title={tab} navItems={navItems}>
+    <Layout appName={app.name} title={tab.charAt(0).toUpperCase() + tab.slice(1)} navItems={navItems}>
       <div className="max-w-4xl mx-auto px-6 py-6">
 
         {/* Setup tab */}
-        {tab === 'Setup' && (
+        {tab === 'setup' && (
           <div className="space-y-4">
             {/* Info */}
             <div className="bg-elevated rounded-xl p-5" style={{ border: '1px solid rgba(139,92,246,0.12)' }}>
@@ -347,8 +379,8 @@ export default function AppDetail() {
           </div>
         )}
 
-        {tab === 'Schema' && <SchemaBuilder appId={slug} />}
-        {tab === 'Submissions' && <Submissions appId={slug} />}
+        {tab === 'schema' && <SchemaBuilder appId={slug} />}
+        {tab === 'submissions' && <Submissions appId={slug} />}
       </div>
     </Layout>
   );
