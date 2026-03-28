@@ -27,6 +27,8 @@ done
 echo "✓ Backend ready"
 
 echo "[3/3] Starting Caddy on port $PORT..."
+echo "    Backend: localhost:$BACKEND_PORT"
+echo "    Public:  0.0.0.0:$PORT"
 
 cat > /tmp/Caddyfile <<EOF
 {
@@ -35,6 +37,10 @@ cat > /tmp/Caddyfile <<EOF
 }
 
 :$PORT {
+  # ── Health check — Always accessible for Railway/monitoring ──────────────
+  handle /health {
+    reverse_proxy localhost:${BACKEND_PORT}
+  }
 
   # ── inbounce.app apex — redirect to admin (DNS misconfiguration safety net) ─
   @apex_host host inbounce.app
@@ -100,4 +106,12 @@ EOF
 
 caddy fmt --overwrite /tmp/Caddyfile
 echo "✓ Caddyfile ready"
+echo ""
+echo "=========================================="
+echo "  Services Ready"
+echo "=========================================="
+echo "  Health: http://localhost:$PORT/health"
+echo "  Admin:  http://localhost:$PORT/"
+echo "=========================================="
+echo ""
 exec caddy run --config /tmp/Caddyfile
