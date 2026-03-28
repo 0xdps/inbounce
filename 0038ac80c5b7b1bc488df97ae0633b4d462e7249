@@ -1,0 +1,24 @@
+README.md
+  775b1b1ff7543f60 114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "0038ac80c5b7b1bc488df97ae0633b4d462e7249",
+  "prompts": {
+    "775b1b1ff7543f60": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "88888118-d4ec-4e76-85cf-9e86951fa44e",
+        "model": "claude-4.5-haiku"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/c20bc22c2683e39066df7744107ce19cffc469755552eb76a145ad94ce6e8a0f"
+    }
+  }
+}
