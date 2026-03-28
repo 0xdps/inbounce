@@ -117,17 +117,24 @@ dev-bg:
 dev-local:
     npm run dev:local
 
-# Start backend locally
+# Start backend locally (TypeScript hot reload with tsx)
 dev-be-local:
-    cd services/backend && node index.js
+    npm --prefix services/backend run dev
 
 # Start frontend locally
 dev-fe-local:
-    cd services/frontend && npm run dev
+    npm --prefix services/frontend run dev
 
 # Seed the database with fake data for testing
 seed:
     cd services/backend && node scripts/seed.js
+
+# Generate fake submissions using API key
+# Usage: just generate-submissions <api_key> [count]
+# Example: just generate-submissions abc123def456 50
+# Note: Uses portless alias by default. For direct access, pass custom endpoint as 3rd arg.
+generate-submissions api_key count='20' endpoint='http://inbounce.localhost:1355/api/submit':
+    node scripts/generate-submissions.mjs {{api_key}} {{count}} {{endpoint}}
 
 # ============================================================================
 # RAILWAY DEPLOY RECIPES
@@ -232,16 +239,28 @@ reset:
 
 # Build frontend
 build-fe:
-    cd services/frontend && npm run build
+    npm --prefix services/frontend run build
 
-# Syntax-check backend entry
+# Build backend (TypeScript compilation)
 build-be:
-    node -c services/backend/index.js
+    npm --prefix services/backend run build
 
 # Build both
 build:
     just build-be
     just build-fe
+
+# Type-check backend
+type-check-be:
+    npm --prefix services/backend run type-check
+
+# Type-check frontend
+type-check-fe:
+    npm --prefix services/frontend run type-check
+
+# Type-check both
+type-check:
+    just type-check-be
 
 # ============================================================================
 # INFRASTRUCTURE

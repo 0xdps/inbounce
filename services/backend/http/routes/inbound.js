@@ -67,7 +67,7 @@ export async function registerInboundRoutes(server) {
     return reply.status(204).send();
   });
 
-  // POST /s/:api_key  — public inbound submission endpoint
+  // POST /api/submit — public inbound submission endpoint (API key authentication)
   server.post('/s/:api_key', {
     config: {
       rateLimit: {

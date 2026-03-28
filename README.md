@@ -8,25 +8,38 @@ Define a schema, get a public slug, start receiving submissions in minutes. Work
 
 ## How it works
 
-1. **Create an app** in the dashboard → receive a unique `slug` (e.g., `my-form-a1b2c3`)
+1. **Create an app** in the dashboard → receive a unique `slug` and `api_key`
 2. **Define a schema** — fields, types, required/unique constraints
-3. **Submit data** — `POST /s/<slug>` from any client
+3. **Submit data** — `POST /api/submit` (local) or `POST https://api.<domain>/submit` (prod) with API key
 
-```
-POST https://<your-domain>/s/my-form-a1b2c3
+**Local development:**
+```bash
+POST http://localhost:1355/api/submit
+Authorization: Bearer <your-api-key>
 Content-Type: application/json
 
 { "name": "Alice", "email": "alice@example.com" }
 ```
 
-The `slug` is a **public** form identifier, not a secret. Submissions are rate-limited to 30 req/min per IP per slug.
+**Production:**
+```bash
+POST https://api.inbounce.app/submit
+Authorization: Bearer <your-api-key>
+Content-Type: application/json
+
+{ "name": "Alice", "email": "alice@example.com" }
+```
+
+The `slug` is a **public** form identifier (read-only in dashboard). The `api_key` is used for authentication. Submissions are rate-limited to 30 req/min per IP per API key.
 
 ---
 
 ## Plain HTML form (no JavaScript)
 
+**Note:** HTML forms cannot set Authorization headers, so you'll need JavaScript for production use. For local testing:
+
 ```html
-<form action="https://<your-domain>/s/my-form-a1b2c3" method="POST">
+<form action="http://localhost:1355/api/submit" method="POST">
   <input type="text"  name="name"  required />
   <input type="email" name="email" required />
   <!-- honeypot — leave empty, bots fill it, we discard silently -->
@@ -77,9 +90,23 @@ The `slug` is a human-readable, immutable identifier:
 
 ### Rate Limiting
 
-Rate limiting uses **`ip:slug`** combination:
-- Limit: 30 requests/minute per IP per slug
+Rate limiting uses **`ip:api_key`** combination:
+- Limit: 30 requests/minute per IP per API key
 - Silently accepts requests beyond the limit (returns `{ ok: true }`)
+
+### Architecture
+
+**Local Development:**
+- Admin Dashboard: `http://localhost:1355/`
+- Backend API: `http://localhost:1355/api/*`
+- Public Submit: `http://localhost:1355/api/submit`
+
+**Production:**
+- Admin Dashboard: `https://manage.inbounce.app/` (or `www.inbounce.app`)
+- Backend API: `https://manage.inbounce.app/api/*` (for admin operations)
+- Public Submit: `https://api.inbounce.app/submit` (dedicated subdomain for public submissions)
+
+The frontend automatically detects the environment and shows the correct endpoint in the embed snippets.
 
 ---
 
@@ -161,7 +188,7 @@ Railway will build the Docker image and expose port `8080` automatically.
 
 || Method | Path | Auth | Description |
 ||--------|------|------|-------------|
-|| `POST` | `/s/:slug` | None | Submit form data |
+|| `POST` | `/api/submit` | API Key (Bearer) | Submit form data |
 || `GET` | `/api/apps` | Session | List apps |
 || `POST` | `/api/apps` | Session | Create app (auto-generates slug) |
 || `GET` | `/api/apps/:slug` | Session | Get app + schema |

@@ -34,6 +34,7 @@ export async function ensureAppTables(db: Database, slug: string): Promise<void>
       { name: 'position', type: 'INTEGER', notNull: true, default: 0 },
       { name: 'compound_key', type: 'TEXT' },
       { name: 'created_at', type: 'INTEGER', notNull: true },
+      { name: 'updated_at', type: 'INTEGER', notNull: true },
     ],
     { ifNotExists: true }
   );

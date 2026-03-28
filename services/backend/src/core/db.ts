@@ -25,6 +25,7 @@ export async function initializeSchema(): Promise<void> {
       { name: 'api_key', type: 'TEXT', notNull: true, unique: true },
       { name: 'allowed_origins', type: 'TEXT', notNull: true, default: "'[]'" },
       { name: 'created_at', type: 'INTEGER', notNull: true },
+      { name: 'updated_at', type: 'INTEGER', notNull: true },
     ],
     { ifNotExists: true }
   );

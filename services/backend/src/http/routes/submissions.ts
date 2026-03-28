@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import db from '../../core/db.js';
 import { authHook } from '../middleware/auth.js';
-import { getSubmissionsTableName } from '../../core/slug.js';
+import { getQuotedSubmissionsTableName } from '../../core/slug.js';
 
 interface DailyStat {
   date: string;
@@ -52,7 +52,7 @@ export async function registerSubmissionsRoutes(server: FastifyInstance): Promis
       const app = await db.findOne('apps', { slug: (request.params as any).slug });
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
-      const tableName = getSubmissionsTableName((request.params as any).slug);
+      const tableName = getQuotedSubmissionsTableName((request.params as any).slug);
       const now = Math.floor(Date.now() / 1000);
       const todayStart = now - (now % 86400);
       const weekAgo = now - 7 * 86400;
@@ -103,7 +103,7 @@ export async function registerSubmissionsRoutes(server: FastifyInstance): Promis
       const app = await db.findOne('apps', { slug: (request.params as any).slug });
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
-      const tableName = getSubmissionsTableName((request.params as any).slug);
+      const tableName = getQuotedSubmissionsTableName((request.params as any).slug);
       const query = (request.query as any);
       const field = ((query.field as string) || '').trim();
       const limit = Math.min(20, Math.max(1, parseInt((query.limit as string) || '8', 10)));
@@ -153,7 +153,7 @@ export async function registerSubmissionsRoutes(server: FastifyInstance): Promis
       const app = await db.findOne('apps', { slug: (request.params as any).slug });
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
-      const tableName = getSubmissionsTableName((request.params as any).slug);
+      const tableName = getQuotedSubmissionsTableName((request.params as any).slug);
       const query = (request.query as any);
       const page = Math.max(1, parseInt((query.page as string) || '1', 10));
       const limit = Math.min(100, Math.max(1, parseInt((query.limit as string) || '20', 10)));
@@ -208,7 +208,7 @@ export async function registerSubmissionsRoutes(server: FastifyInstance): Promis
       const app = await db.findOne('apps', { slug: (request.params as any).slug });
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
-      const tableName = getSubmissionsTableName((request.params as any).slug);
+      const tableName = getQuotedSubmissionsTableName((request.params as any).slug);
       const sub = await db.findOne(tableName, { id: (request.params as any).sid });
       if (!sub) return reply.status(404).send({ error: 'Submission not found' });
 
@@ -225,7 +225,7 @@ export async function registerSubmissionsRoutes(server: FastifyInstance): Promis
       const app = await db.findOne('apps', { slug: (request.params as any).slug });
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
-      const tableName = getSubmissionsTableName((request.params as any).slug);
+      const tableName = getQuotedSubmissionsTableName((request.params as any).slug);
       const { confirm } = (request.body as any) || {};
       if (confirm !== true) {
         return reply.status(400).send({ error: 'Pass { confirm: true } to delete all submissions' });

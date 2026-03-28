@@ -7,9 +7,9 @@ import {
   getAppMetadata,
   initializeCacheResetTimer,
 } from '../../core/caches.js';
-import { SchemaField } from '../../core/schema-builder.js';
-import { getSchemaFieldsTableName, getSubmissionsTableName } from '../../core/slug.js';
+import { getQuotedSchemaFieldsTableName, getQuotedSubmissionsTableName, getSubmissionsTableName } from '../../core/slug.js';
 import { ensureAppTables } from '../../core/tables.js';
+import { SchemaField } from '../../core/schema-builder.js';
 import config from '../../core/config.js';
 
 const MAX_BODY_BYTES = 16 * 1024; // 16KB
@@ -20,7 +20,8 @@ const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|lo
 async function fetchGeo(ip: string, submissionId: string, slug: string): Promise<void> {
   if (!ip || PRIVATE_IP_RE.test(ip)) return;
   try {
-    const tableName = getSubmissionsTableName(slug);
+    const tableName = getSubmissionsTableName(slug);  // Unquoted for ORM
+    const tableNameQuoted = getQuotedSubmissionsTableName(slug);  // Quoted for SQL
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 3000);
     const res = await fetch(
@@ -40,7 +41,7 @@ async function fetchGeo(ip: string, submissionId: string, slug: string): Promise
     const sub = (await db.findOne(tableName, { id: submissionId })) as { meta?: string } | null;
     if (!sub) return;
     const existing = sub.meta ? JSON.parse(sub.meta) : {};
-    await db.exec(`UPDATE ${tableName} SET meta = ? WHERE id = ?`, [
+    await db.exec(`UPDATE ${tableNameQuoted} SET meta = ? WHERE id = ?`, [
       JSON.stringify({
         ...existing,
         geo: { city: geo.city, region: geo.regionName, country: geo.country, isp: geo.isp },
@@ -57,24 +58,24 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
   initializeCacheResetTimer(logger);
 
   // Handle CORS preflight for the public endpoint
-  server.options('/s/:slug', async (_request, reply) => {
+  server.options('/api/submit', async (_request, reply) => {
     const origin = _request.headers.origin;
     reply.header('Access-Control-Allow-Origin', origin || '*');
     reply.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    reply.header('Access-Control-Allow-Headers', 'Content-Type, Idempotency-Key');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Idempotency-Key, Authorization');
     reply.header('Access-Control-Max-Age', '86400');
     return reply.status(204).send();
   });
 
-  // POST /s/:slug — public inbound submission endpoint
-  server.post<{ Params: { slug: string }; Body: Record<string, unknown> }>(
-    '/s/:slug',
+  // POST /api/submit — public inbound submission endpoint (requires api_key in Authorization header)
+  server.post<{ Body: Record<string, unknown> }>(
+    '/api/submit',
     {
       config: {
         rateLimit: {
           max: 30,
           timeWindow: '1 minute',
-          keyGenerator: (req: any) => `${req.ip}:${req.params.slug}`,  // Rate limit by IP + slug
+          keyGenerator: (req: any) => `${req.ip}:${req.headers.authorization || 'unknown'}`,  // Rate limit by IP + API key
           errorResponseBuilder: (_req, reply) => {
             reply.statusCode = 200;
             return { ok: true };  // Silent fail for rate-limited requests
@@ -88,6 +89,18 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
       // Always set permissive CORS on this public endpoint
       reply.header('Access-Control-Allow-Origin', origin || '*');
       reply.header('Access-Control-Allow-Credentials', 'true');
+
+      // Extract and validate API key from Authorization header
+      const authHeader = request.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        if (config.debugInbound) {
+          logger.warn({ authHeader }, 'Inbound: missing or invalid authorization header');
+          return reply.status(401).send({ ok: false, error: 'Missing API key' });
+        }
+        return reply.status(200).send({ ok: true });
+      }
+
+      const api_key = authHeader.slice(7); // Remove "Bearer " prefix
 
       try {
         // Body size guard — silently ok if too large
@@ -130,19 +143,20 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
         // Strip honeypot field before validation
         const { _hp, ...payload } = body as Record<string, unknown>;
 
-        // Get app metadata (cached)
-        const slug = (request.params as any).slug;
-        const appMetadata = await getAppMetadata(slug, async (s) => {
-          return await db.findOne('apps', { slug: s });
+        // Get app metadata (cached) — lookup by API key
+        const appMetadata = await getAppMetadata(api_key, async (key) => {
+          return await db.findOne('apps', { api_key: key });
         });
 
         if (!appMetadata) {
           if (config.debugInbound) {
-            logger.warn({ slug }, 'Inbound: app not found');
+            logger.warn({ api_key }, 'Inbound: app not found');
             return reply.status(404).send({ ok: false, error: 'App not found' });
           }
           return reply.status(200).send({ ok: true });
         }
+
+        const slug = appMetadata.slug;
 
         // Per-app CORS origin check — silently ok (don't expose origin config)
         if (appMetadata.allowed_origins.length > 0 && origin && !appMetadata.allowed_origins.includes(origin)) {
@@ -157,16 +171,16 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
         await ensureAppTables(db, slug);
 
         // Get schema (cached)
-        const schemaTable = getSchemaFieldsTableName(slug);
+        const schemaTable = getQuotedSchemaFieldsTableName(slug);
         const zodSchema = await getZodSchema(slug, async () => {
-          return (await db.find(schemaTable, {}, {
+          return (await db.find(schemaTable.slice(1, -1), {}, {  // Remove backticks for find()
             orderBy: 'position',
             order: 'ASC',
-          })) as SchemaField[];
+          })) as unknown as SchemaField[];
         });
 
         // No schema yet — silently ok if no fields were defined
-        const fields = await db.find(schemaTable, {});
+        const fields = await db.find(schemaTable.slice(1, -1), {});  // Remove backticks for find()
         if (fields.length === 0) {
           if (config.debugInbound) {
             logger.warn({ slug }, 'Inbound: no schema fields');
@@ -189,7 +203,8 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
 
         // Idempotency key check
         const idempotencyKey = (request.headers['idempotency-key'] as string) || null;
-        const submissionsTable = getSubmissionsTableName(slug);
+        const submissionsTable = getSubmissionsTableName(slug);  // Unquoted for ORM methods
+        const submissionsTableQuoted = getQuotedSubmissionsTableName(slug);  // Quoted for raw SQL
 
         if (idempotencyKey) {
           const existing = await db.findOne(submissionsTable, { idempotency_key: idempotencyKey });
@@ -205,7 +220,7 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
         }
 
         // Individual unique field checks — duplicates bump a counter
-        const fieldsArray = (await db.find(schemaTable, {})) as SchemaField[];
+        const fieldsArray = (await db.find(schemaTable.slice(1, -1), {})) as unknown as SchemaField[];  // Remove backticks for find()
 
         for (const field of fieldsArray) {
           if (!field.unique || field.compound_key) continue;
@@ -213,12 +228,12 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
           if (value === undefined) continue;
 
           const hit = await db.exec(
-            `SELECT id FROM ${submissionsTable} WHERE json_extract(data, '$.${field.name}') = ? LIMIT 1`,
+            `SELECT id FROM ${submissionsTableQuoted} WHERE json_extract(data, '$.${field.name}') = ? LIMIT 1`,
             [String(value)]
           );
           const orig = ((hit as any)?.rows?.[0] as { id: string } | undefined);
           if (orig) {
-            await db.exec(`UPDATE ${submissionsTable} SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?`, [
+            await db.exec(`UPDATE ${submissionsTableQuoted} SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?`, [
               Math.floor(Date.now() / 1000),
               orig.id,
             ]);
@@ -242,10 +257,10 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
           if (present.length === 0) continue;
           const conditions = present.map((f) => `json_extract(data, '$.${f.name}') = ?`);
           const params = present.map((f) => String(validatedData[f.name]));
-          const hit = await db.exec(`SELECT id FROM ${submissionsTable} WHERE ${conditions.join(' AND ')} LIMIT 1`, params);
+          const hit = await db.exec(`SELECT id FROM ${submissionsTableQuoted} WHERE ${conditions.join(' AND ')} LIMIT 1`, params);
           const orig = ((hit as any)?.rows?.[0] as { id: string } | undefined);
           if (orig) {
-            await db.exec(`UPDATE ${submissionsTable} SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?`, [
+            await db.exec(`UPDATE ${submissionsTableQuoted} SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?`, [
               Math.floor(Date.now() / 1000),
               orig.id,
             ]);

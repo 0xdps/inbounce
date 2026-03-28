@@ -39,9 +39,26 @@ function inputType(type) {
   return 'text';
 }
 
-function EmbedSnippet({ slug, fields = [] }) {
+function EmbedSnippet({ apiKey, fields = [] }) {
   const [mode, setMode] = useState('fetch');
-  const url = `${window.location.origin}/s/${slug}`;
+  
+  // Determine the correct submission endpoint based on environment
+  const getSubmitUrl = () => {
+    const origin = window.location.origin;
+    const hostname = window.location.hostname;
+    
+    // Local development: use same origin with /api/submit
+    if (hostname === 'localhost' || hostname.includes('.localhost')) {
+      return `${origin}/api/submit`;
+    }
+    
+    // Production: use api.<domain>/submit
+    // e.g., manage.inbounce.app → api.inbounce.app/submit
+    const domain = hostname.replace(/^(manage\.|www\.)/, '');
+    return `https://api.${domain}/submit`;
+  };
+  
+  const url = getSubmitUrl();
 
   const bodyFields = fields.length > 0
     ? fields.map(f => {
@@ -52,7 +69,10 @@ function EmbedSnippet({ slug, fields = [] }) {
 
   const fetchSnippet = `await fetch('${url}', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer ${apiKey}'
+  },
   body: JSON.stringify({
 ${bodyFields}
   }),
@@ -68,14 +88,33 @@ ${bodyFields}
       }).join('\n')
     : '  <!-- define schema fields in the Schema tab -->';
 
-  const formSnippet = `<form action="${url}" method="POST">
+  const formSnippet = `<!-- Note: HTML forms cannot send Authorization headers -->
+<!-- Use JavaScript fetch for API key authentication -->
+<form id="myForm">
 ${formInputs}
 
   <!-- honeypot: leave empty -->
   <input type="text" name="_hp" style="display:none" tabindex="-1" autocomplete="off" />
 
   <button type="submit">Submit</button>
-</form>`;
+</form>
+
+<script>
+document.getElementById('myForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = new FormData(this);
+  const obj = Object.fromEntries(data);
+  
+  await fetch('${url}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ${apiKey}'
+    },
+    body: JSON.stringify(obj),
+  });
+});
+</script>`;
 
   const active = mode === 'fetch' ? fetchSnippet : formSnippet;
 
@@ -108,7 +147,7 @@ ${formInputs}
 const TABS = ['Submissions', 'Schema', 'Setup'];
 
 export default function AppDetail() {
-  const { id } = useParams();
+  const { slug } = useParams();
   const navigate = useNavigate();
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -124,7 +163,7 @@ export default function AppDetail() {
   const [schema, setSchema] = useState([]);
 
   useEffect(() => {
-    Promise.all([api.getApp(id), api.getSchema(id)])
+    Promise.all([api.getApp(slug), api.getSchema(slug)])
       .then(([a, fields]) => {
         setApp(a);
         setSchema(fields);
@@ -134,13 +173,13 @@ export default function AppDetail() {
       })
       .catch(() => navigate('/apps'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [slug]);
 
   async function rotateKey() {
     if (!confirm('Rotate API key? The old key will stop working immediately.')) return;
     setRotating(true);
     try {
-      const { api_key } = await api.rotateKey(id);
+      const { api_key } = await api.rotateKey(slug);
       setApp((prev) => ({ ...prev, api_key }));
     } finally {
       setRotating(false);
@@ -151,7 +190,7 @@ export default function AppDetail() {
     if (!confirm(`Delete "${app.name}"? This will permanently delete all submissions.`)) return;
     setDeleting(true);
     try {
-      await api.deleteApp(id);
+      await api.deleteApp(slug);
       navigate('/apps');
     } finally {
       setDeleting(false);
@@ -163,7 +202,7 @@ export default function AppDetail() {
     setSaving(true);
     try {
       const allowed_origins = editOrigins.split(',').map((o) => o.trim()).filter(Boolean);
-      const updated = await api.updateApp(id, { name: editName, description: editDesc, allowed_origins });
+      const updated = await api.updateApp(slug, { name: editName, description: editDesc, allowed_origins });
       setApp((prev) => ({ ...prev, ...updated }));
       setEditing(false);
     } finally {
@@ -259,32 +298,6 @@ export default function AppDetail() {
               )}
             </div>
 
-            {/* Slug */}
-            <div className="bg-elevated rounded-xl p-5" style={{ border: '1px solid rgba(139,92,246,0.12)' }}>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-text-primary font-semibold text-sm">Public identifier</h2>
-              </div>
-              <div className="bg-overlay rounded-lg px-3 py-3 font-mono text-xs text-text-secondary break-all" style={{ border: '1px solid rgba(139,92,246,0.1)' }}>
-                <div className="flex items-center justify-between gap-2">
-                  <span>{app.slug}</span>
-                  <CopyButton text={app.slug} />
-                </div>
-              </div>
-              <p className="text-text-muted text-xs mt-2">Use this slug for your public submission endpoint: <span className="font-mono">/s/{app.slug}</span></p>
-            </div>
-
-            {/* Endpoint */}
-            <div className="bg-elevated rounded-xl p-5" style={{ border: '1px solid rgba(139,92,246,0.12)' }}>
-              <h2 className="text-text-primary font-semibold text-sm mb-3">Submission endpoint</h2>
-              <div className="bg-overlay rounded-lg px-3 py-3 font-mono text-xs text-text-secondary break-all" style={{ border: '1px solid rgba(139,92,246,0.1)' }}>
-                <div className="flex items-center justify-between gap-2">
-                  <span>{`${window.location.origin}/s/${app.slug}`}</span>
-                  <CopyButton text={`${window.location.origin}/s/${app.slug}`} />
-                </div>
-              </div>
-              <p className="text-text-muted text-xs mt-2">POST JSON data to this endpoint to submit form responses.</p>
-            </div>
-
             {/* API Key */}
             <div className="bg-elevated rounded-xl p-5" style={{ border: '1px solid rgba(139,92,246,0.12)' }}>
               <div className="flex items-center justify-between mb-3">
@@ -307,11 +320,11 @@ export default function AppDetail() {
               <div className="bg-overlay rounded-lg px-3 py-2 font-mono text-xs text-text-secondary break-all" style={{ border: '1px solid rgba(139,92,246,0.1)' }}>
                 {keyVisible ? app.api_key : '•'.repeat(48)}
               </div>
-              <p className="text-text-muted text-xs mt-2">Treat this as a semi-public write-only token — it grants submission access only.</p>
+              <p className="text-text-muted text-xs mt-2">Include this as a Bearer token in the Authorization header when submitting to the endpoint above. Keep it secret!</p>
             </div>
 
             {/* Embed snippet */}
-            <EmbedSnippet slug={app.slug} fields={schema} />
+            <EmbedSnippet apiKey={app.api_key} fields={schema} />
 
             {/* Danger zone */}
             <div className="bg-elevated rounded-xl p-5" style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
@@ -334,8 +347,8 @@ export default function AppDetail() {
           </div>
         )}
 
-        {tab === 'Schema' && <SchemaBuilder appId={id} />}
-        {tab === 'Submissions' && <Submissions appId={id} />}
+        {tab === 'Schema' && <SchemaBuilder appId={slug} />}
+        {tab === 'Submissions' && <Submissions appId={slug} />}
       </div>
     </Layout>
   );

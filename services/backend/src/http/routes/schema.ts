@@ -7,7 +7,7 @@ import { getSchemaFieldsTableName } from '../../core/slug.js';
 import { invalidateSchemaCacheForApp } from '../../core/caches.js';
 
 const VALID_TYPES = new Set(['string', 'email', 'number', 'boolean', 'url', 'date']);
-const RESERVED_NAMES = new Set(['id', 'data', 'idempotency_key', 'ip', 'created_at']);
+const RESERVED_NAMES = new Set(['id', 'data', 'idempotency_key', 'ip', 'created_at', 'updated_at']);
 const FIELD_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 interface FieldInput {
@@ -60,7 +60,7 @@ export async function registerSchemaRoutes(server: FastifyInstance): Promise<voi
           orderBy: 'position',
           order: 'ASC',
         }
-      )) as SchemaField[];
+      )) as unknown as SchemaField[];
       return fields;
     }
   );
@@ -90,6 +90,8 @@ export async function registerSchemaRoutes(server: FastifyInstance): Promise<voi
         unique: f.unique ? 1 : 0,
         position: f.position ?? i,
         compound_key: f.compound_key && FIELD_NAME_RE.test(f.compound_key) ? f.compound_key : null,
+        created_at: Math.floor(Date.now() / 1000),
+        updated_at: Math.floor(Date.now() / 1000),
       }));
 
       if (rows.length > 0) {

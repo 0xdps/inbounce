@@ -98,3 +98,25 @@ export function getSchemaFieldsTableName(slug: string): string {
 export function getSubmissionsTableName(slug: string): string {
   return `sub_${slug}`;
 }
+
+/**
+ * Get quoted table name for SQL queries
+ * Wraps the table name in backticks to handle dashes and other special chars
+ * 
+ * @param slug - App slug
+ * @returns Quoted table name for schema fields (e.g., "`sef_newsletter-app-a1b2c3`")
+ */
+export function getQuotedSchemaFieldsTableName(slug: string): string {
+  return `\`sef_${slug}\``;
+}
+
+/**
+ * Get quoted table name for SQL queries
+ * Wraps the table name in backticks to handle dashes and other special chars
+ * 
+ * @param slug - App slug
+ * @returns Quoted table name for submissions (e.g., "`sub_newsletter-app-a1b2c3`")
+ */
+export function getQuotedSubmissionsTableName(slug: string): string {
+  return `\`sub_${slug}\``;
+}

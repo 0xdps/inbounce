@@ -8,6 +8,26 @@ This guide covers local development, testing, and debugging for Inbounce.
 - **npm**: v10+
 - **Docker** (optional, for containerized development)
 
+## Architecture Overview
+
+### Environment-Specific Endpoints
+
+**Local Development:**
+- Admin Dashboard: `http://localhost:1355/` (or `http://inbounce.localhost:1355/`)
+- Backend API (admin): `http://localhost:1355/api/*`
+- Public Submit: `http://localhost:1355/api/submit`
+- All traffic goes through Caddy on port 1355, which routes to backend (3000) or frontend (5173)
+
+**Production:**
+- Admin Dashboard: `https://manage.inbounce.app/` (or `www.inbounce.app`)
+- Backend API (admin): `https://manage.inbounce.app/api/*`
+- Public Submit: `https://api.inbounce.app/submit` (dedicated subdomain)
+- Caddy handles host-based routing to serve admin and API on different subdomains
+
+The frontend `EmbedSnippet` component automatically detects the environment and displays the correct endpoint.
+
+---
+
 ## Quick Start
 
 ### 1. Install Dependencies
@@ -73,7 +93,7 @@ services/backend/src/
 │   │   ├── apps.ts        App CRUD endpoints
 │   │   ├── schema.ts      Schema field management
 │   │   ├── submissions.ts Submission listing, stats, distribution
-│   │   ├── inbound.ts     Public submission endpoint (/s/:slug)
+│   │   ├── inbound.ts     Public submission endpoint (/api/submit)
 │   │   └── auth.ts        Admin login/logout
 │   ├── middleware/
 │   │   └── auth.ts        Session verification, JWT signing
@@ -153,9 +173,10 @@ function Component({ prop }: { prop: any }) {
 
 3. **Submit data**:
    ```bash
-   curl -X POST http://localhost:3000/s/my-form-a1b2c3 \
-     -H "Content-Type: application/json" \
-     -d '{"name":"Alice","email":"alice@example.com","message":"Hello"}'
+  curl -X POST http://localhost:3000/api/submit \
+    -H "Authorization: Bearer <your-api-key>" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"Alice","email":"alice@example.com","message":"Hello"}'
    ```
 
 4. **View submissions**:
@@ -175,13 +196,15 @@ DEBUG=inbounce:* npm --prefix services/backend run dev
 ```bash
 # First 30 requests succeed
 for i in {1..30}; do
-  curl -X POST http://localhost:3000/s/my-form-a1b2c3 \
-    -H "Content-Type: application/json" \
-    -d '{"name":"Test '$i'"}'
+ curl -X POST http://localhost:3000/api/submit \
+   -H "Authorization: Bearer <your-api-key>" \
+   -H "Content-Type: application/json" \
+   -d '{"name":"Test '$i'"}'
 done
 
 # 31st request silently accepted but not stored
-curl -X POST http://localhost:3000/s/my-form-a1b2c3 \
+curl -X POST http://localhost:3000/api/submit \
+  -H "Authorization: Bearer <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{"name":"Test 31"}'
 # Returns { ok: true } but submission discarded

@@ -15,6 +15,7 @@ interface App {
   api_key: string;
   allowed_origins: string;
   created_at: number;
+  updated_at: number;
 }
 
 interface AppResponse extends Omit<App, 'allowed_origins'> {
@@ -31,13 +32,14 @@ function parseApp(app: App): Omit<AppResponse, 'submission_count'> {
     api_key: app.api_key,
     allowed_origins: JSON.parse(app.allowed_origins || '[]'),
     created_at: app.created_at,
+    updated_at: app.updated_at,
   };
 }
 
 export async function registerAppsRoutes(server: FastifyInstance): Promise<void> {
   // GET /api/apps
   server.get('/api/apps', { preHandler: [authHook] }, async () => {
-    const apps = (await db.find('apps', {}, { orderBy: 'created_at', order: 'DESC' })) as App[];
+    const apps = (await db.find('apps', {}, { orderBy: 'created_at', order: 'DESC' })) as unknown as App[];
     const result = await Promise.all(
       apps.map(async (app) => {
         const submissionsTable = getSubmissionsTableName(app.slug);
@@ -82,6 +84,7 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
         api_key,
         allowed_origins: originsJson,
         created_at: now,
+        updated_at: now,
       });
 
       // Create per-app tables
@@ -96,6 +99,7 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
         api_key,
         allowed_origins: JSON.parse(originsJson),
         created_at: now,
+        updated_at: now,
       });
     }
   );
@@ -136,6 +140,8 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
         return reply.status(400).send({ error: 'No fields to update' });
       }
 
+      updates.updated_at = Math.floor(Date.now() / 1000);
+
       await db.update('apps', updates, { id: app.id });
       invalidateAppMetadataCacheForApp(app.slug);
 
@@ -175,7 +181,8 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
       const api_key = randomBytes(32).toString('hex');
-      await db.update('apps', { api_key }, { id: app.id });
+      const now = Math.floor(Date.now() / 1000);
+      await db.update('apps', { api_key, updated_at: now }, { id: app.id });
       invalidateAppMetadataCacheForApp(app.slug);
 
       logger.info({ appId: app.id, slug: app.slug }, 'API key rotated');

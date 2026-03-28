@@ -9,7 +9,7 @@ echo "  Inbounce — Starting Services"
 echo "=========================================="
 
 echo "[1/3] Starting backend on port $BACKEND_PORT..."
-PORT=$BACKEND_PORT node /app/services/backend/index.js &
+PORT=$BACKEND_PORT node /app/services/backend/dist/index.js &
 BACKEND_PID=$!
 
 echo "[2/3] Waiting for backend..."
@@ -51,10 +51,6 @@ cat > /tmp/Caddyfile <<EOF
       reverse_proxy localhost:${BACKEND_PORT}
     }
 
-    handle /s/* {
-      reverse_proxy localhost:${BACKEND_PORT}
-    }
-
     handle /health {
       reverse_proxy localhost:${BACKEND_PORT}
     }
@@ -81,10 +77,6 @@ cat > /tmp/Caddyfile <<EOF
     root * /usr/share/caddy
 
     handle /api/* {
-      reverse_proxy localhost:${BACKEND_PORT}
-    }
-
-    handle /s/* {
       reverse_proxy localhost:${BACKEND_PORT}
     }
 

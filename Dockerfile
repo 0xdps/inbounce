@@ -2,6 +2,9 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
+# Copy root tsconfig first (needed by backend/frontend)
+COPY tsconfig.json ./
+
 # Install frontend dependencies and build
 COPY services/frontend/package*.json ./services/frontend/
 RUN cd services/frontend && npm install
@@ -29,6 +32,7 @@ FROM node:22-alpine AS dev
 WORKDIR /app
 RUN apk add --no-cache curl
 
+COPY tsconfig.json ./
 COPY --from=builder /app/services/backend/node_modules ./services/backend/node_modules
 COPY services/backend/src       ./services/backend/src
 COPY services/backend/tsconfig.json ./services/backend/
@@ -46,6 +50,7 @@ RUN apk add --no-cache curl
 WORKDIR /app
 RUN mkdir -p /usr/share/caddy
 
+COPY tsconfig.json ./
 COPY --from=builder /app/services/backend/node_modules ./services/backend/node_modules
 COPY --from=builder /app/services/backend/dist    ./services/backend/dist
 COPY services/backend/package.json  ./services/backend/

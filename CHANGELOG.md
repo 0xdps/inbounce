@@ -29,7 +29,7 @@ Inbounce v1.0 — Production-ready form backend as a service.
 
 #### API Endpoints
 
-- `POST /s/:slug` — Public submission endpoint
+- `POST /api/submit` — Public submission endpoint (API key authentication)
 - `GET/POST/PUT/DELETE /api/apps` — App management
 - `GET/PUT /api/apps/:slug/schema` — Schema management
 - `GET/DELETE /api/apps/:slug/submissions` — Submission management
