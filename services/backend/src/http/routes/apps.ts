@@ -1,22 +1,11 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID, randomBytes } from 'crypto';
-import db from '../../core/db.js';
 import logger from '../../core/logger.js';
 import { authHook } from '../middleware/auth.js';
-import { createUniqueSlug, getSubmissionsTableName } from '../../core/slug.js';
-import { ensureAppTables, dropAppTables } from '../../core/tables.js';
+import { createUniqueSlug } from '../../core/slug.js';
 import { invalidateSchemaCacheForApp, invalidateAppMetadataCacheForApp } from '../../core/caches.js';
-
-interface App {
-  id: string;
-  slug: string;
-  name: string;
-  description: string | null;
-  api_key: string;
-  allowed_origins: string;
-  created_at: number;
-  updated_at: number;
-}
+import { appRepository, tableManager } from '../../repositories/index.js';
+import type { App } from '../../repositories/interfaces.js';
 
 interface AppResponse extends Omit<App, 'allowed_origins'> {
   allowed_origins: string[];
@@ -39,16 +28,12 @@ function parseApp(app: App): Omit<AppResponse, 'submission_count'> {
 export async function registerAppsRoutes(server: FastifyInstance): Promise<void> {
   // GET /api/apps
   server.get('/api/apps', { preHandler: [authHook] }, async () => {
-    const apps = (await db.find('apps', {}, { orderBy: 'created_at', order: 'DESC' })) as unknown as App[];
+    const apps = await appRepository.findAll();
     const result = await Promise.all(
-      apps.map(async (app) => {
-        const submissionsTable = getSubmissionsTableName(app.slug);
-        const submission_count = await db.count(submissionsTable, {});
-        return {
-          ...parseApp(app),
-          submission_count,
-        };
-      })
+      apps.map(async (app) => ({
+        ...parseApp(app),
+        submission_count: await appRepository.submissionCount(app.slug),
+      })),
     );
     return result;
   });
@@ -70,13 +55,12 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
 
       // Generate unique slug
       const slug = await createUniqueSlug(name.trim(), async (candidate) => {
-        const existing = await db.findOne('apps', { slug: candidate });
-        return !!existing;
+        return !!(await appRepository.findBySlug(candidate));
       });
 
       const originsJson = JSON.stringify(Array.isArray(allowed_origins) ? allowed_origins : []);
 
-      await db.insert('apps', {
+      await appRepository.create({
         id,
         slug,
         name: name.trim(),
@@ -88,7 +72,7 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
       });
 
       // Create per-app tables
-      await ensureAppTables(db, slug);
+      await tableManager.ensureAppTables(slug);
 
       logger.info({ appId: id, slug }, 'App created');
       return reply.status(201).send({
@@ -101,7 +85,7 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
         created_at: now,
         updated_at: now,
       });
-    }
+    },
   );
 
   // GET /api/apps/:slug
@@ -109,14 +93,12 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
     '/api/apps/:slug',
     { preHandler: [authHook] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const app = (await db.findOne('apps', { slug: (request.params as any).slug })) as App | null;
+      const app = await appRepository.findBySlug((request.params as any).slug);
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
-      const submissionsTable = getSubmissionsTableName(app.slug);
-      const submission_count = await db.count(submissionsTable, {});
-
+      const submission_count = await appRepository.submissionCount(app.slug);
       return { ...parseApp(app), submission_count };
-    }
+    },
   );
 
   // PUT /api/apps/:slug
@@ -124,16 +106,18 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
     '/api/apps/:slug',
     { preHandler: [authHook] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const app = (await db.findOne('apps', { slug: (request.params as any).slug })) as App | null;
+      const app = await appRepository.findBySlug((request.params as any).slug);
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
       const { name, description, allowed_origins } = (request.body as any) || {};
-      const updates: Record<string, unknown> = {};
+      const updates: Partial<App> = {};
 
       if (name !== undefined) updates.name = name.trim();
       if (description !== undefined) updates.description = description?.trim() || null;
       if (allowed_origins !== undefined) {
-        updates.allowed_origins = JSON.stringify(Array.isArray(allowed_origins) ? allowed_origins : []);
+        updates.allowed_origins = JSON.stringify(
+          Array.isArray(allowed_origins) ? allowed_origins : [],
+        );
       }
 
       if (Object.keys(updates).length === 0) {
@@ -142,11 +126,11 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
 
       updates.updated_at = Math.floor(Date.now() / 1000);
 
-      await db.update('apps', updates, { id: app.id });
+      await appRepository.update(app.id, updates);
       invalidateAppMetadataCacheForApp(app.slug);
 
       return parseApp({ ...app, ...updates } as App);
-    }
+    },
   );
 
   // DELETE /api/apps/:slug
@@ -154,22 +138,18 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
     '/api/apps/:slug',
     { preHandler: [authHook] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const app = (await db.findOne('apps', { slug: (request.params as any).slug })) as App | null;
+      const app = await appRepository.findBySlug((request.params as any).slug);
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
-      // Drop app tables
-      await dropAppTables(db, app.slug);
+      await tableManager.dropAppTables(app.slug);
+      await appRepository.delete(app.id);
 
-      // Delete app record
-      await db.delete('apps', { id: app.id });
-
-      // Invalidate caches
       invalidateSchemaCacheForApp(app.slug);
       invalidateAppMetadataCacheForApp(app.slug);
 
       logger.info({ appId: app.id, slug: app.slug }, 'App deleted');
       return reply.status(204).send();
-    }
+    },
   );
 
   // POST /api/apps/:slug/rotate-key
@@ -177,16 +157,16 @@ export async function registerAppsRoutes(server: FastifyInstance): Promise<void>
     '/api/apps/:slug/rotate-key',
     { preHandler: [authHook] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const app = (await db.findOne('apps', { slug: (request.params as any).slug })) as App | null;
+      const app = await appRepository.findBySlug((request.params as any).slug);
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
       const api_key = randomBytes(32).toString('hex');
       const now = Math.floor(Date.now() / 1000);
-      await db.update('apps', { api_key, updated_at: now }, { id: app.id });
+      await appRepository.update(app.id, { api_key, updated_at: now });
       invalidateAppMetadataCacheForApp(app.slug);
 
       logger.info({ appId: app.id, slug: app.slug }, 'API key rotated');
       return { api_key };
-    }
+    },
   );
 }

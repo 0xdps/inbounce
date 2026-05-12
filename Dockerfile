@@ -1,4 +1,27 @@
-# Builder stage
+# ── Stage: build-core ────────────────────────────────────────────────────────
+# Clones mesahub-core and builds the Go binary from source.
+# Override MESAHUB_CORE_VERSION at build time to pin a specific commit/tag:
+#   docker build --build-arg MESAHUB_CORE_VERSION=trunk .
+FROM golang:1.24-alpine AS build-core
+RUN apk add --no-cache gcc musl-dev sqlite-dev git
+ARG MESAHUB_CORE_VERSION=trunk
+RUN git clone --depth 1 --branch ${MESAHUB_CORE_VERSION} \
+    https://github.com/mesahub-db/mesahub-core.git /mesahub-core
+WORKDIR /mesahub-core/server
+RUN CGO_ENABLED=1 GOOS=linux go build -o /go/bin/mesahub-server ./cmd/server
+
+# ── Stage: mesahub ───────────────────────────────────────────────────────────
+# Standalone runnable mesahub-server container for local dev (docker compose).
+FROM alpine:3.21 AS mesahub
+RUN apk add --no-cache ca-certificates curl sqlite-libs
+COPY --from=build-core /go/bin/mesahub-server /usr/local/bin/mesahub-server
+VOLUME /data
+EXPOSE 3002
+HEALTHCHECK --interval=5s --timeout=3s --start-period=30s \
+  CMD curl -sf http://localhost:3002/api/health || exit 1
+CMD ["mesahub-server"]
+
+# ── Stage: builder ────────────────────────────────────────────────────────────
 FROM node:22-alpine AS builder
 WORKDIR /app
 
@@ -41,14 +64,19 @@ COPY services/backend/package.json  ./services/backend/
 EXPOSE 3000
 CMD ["npm", "--prefix", "services/backend", "run", "dev"]
 
-# Production stage — Caddy + Node
+# Production stage — Caddy + Node + mesahub-server
 FROM caddy:2-alpine AS caddy-bin
 
 FROM node:22-alpine AS prod
 COPY --from=caddy-bin /usr/bin/caddy /usr/bin/caddy
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl openssl
 WORKDIR /app
 RUN mkdir -p /usr/share/caddy
+
+# mesahub-server (for embedded mode — skipped if MESAHUB_URL points to external host)
+COPY --from=build-core /go/bin/mesahub-server /usr/local/bin/mesahub-server
+RUN mkdir -p /data
+VOLUME ["/data"]
 
 COPY tsconfig.json ./
 COPY --from=builder /app/services/backend/node_modules ./services/backend/node_modules

@@ -1,16 +1,14 @@
 import { randomUUID } from 'crypto';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import db from '../../core/db.js';
 import logger from '../../core/logger.js';
 import {
   getZodSchema,
   getAppMetadata,
   initializeCacheResetTimer,
 } from '../../core/caches.js';
-import { getQuotedSchemaFieldsTableName, getQuotedSubmissionsTableName, getSubmissionsTableName } from '../../core/slug.js';
-import { ensureAppTables } from '../../core/tables.js';
 import { SchemaField } from '../../core/schema-builder.js';
 import config from '../../core/config.js';
+import { appRepository, schemaRepository, submissionRepository, tableManager } from '../../repositories/index.js';
 
 const MAX_BODY_BYTES = 16 * 1024; // 16KB
 const MAX_FIELDS = 50;
@@ -20,8 +18,6 @@ const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|lo
 async function fetchGeo(ip: string, submissionId: string, slug: string): Promise<void> {
   if (!ip || PRIVATE_IP_RE.test(ip)) return;
   try {
-    const tableName = getSubmissionsTableName(slug);  // Unquoted for ORM
-    const tableNameQuoted = getQuotedSubmissionsTableName(slug);  // Quoted for SQL
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 3000);
     const res = await fetch(
@@ -38,16 +34,13 @@ async function fetchGeo(ip: string, submissionId: string, slug: string): Promise
       isp?: string;
     };
     if (geo.status !== 'success') return;
-    const sub = (await db.findOne(tableName, { id: submissionId })) as { meta?: string } | null;
+    const sub = await submissionRepository.findById(slug, submissionId);
     if (!sub) return;
     const existing = sub.meta ? JSON.parse(sub.meta) : {};
-    await db.exec(`UPDATE ${tableNameQuoted} SET meta = ? WHERE id = ?`, [
-      JSON.stringify({
-        ...existing,
-        geo: { city: geo.city, region: geo.regionName, country: geo.country, isp: geo.isp },
-      }),
-      submissionId,
-    ]);
+    await submissionRepository.updateMeta(slug, submissionId, {
+      ...existing,
+      geo: { city: geo.city, region: geo.regionName, country: geo.country, isp: geo.isp },
+    });
   } catch {
     // geo is optional — ignore failures
   }
@@ -145,7 +138,7 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
 
         // Get app metadata (cached) — lookup by API key
         const appMetadata = await getAppMetadata(api_key, async (key) => {
-          return await db.findOne('apps', { api_key: key });
+          return appRepository.findByApiKey(key);
         });
 
         if (!appMetadata) {
@@ -168,20 +161,16 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
         }
 
         // Ensure app tables exist (idempotent)
-        await ensureAppTables(db, slug);
+        await tableManager.ensureAppTables(slug);
 
         // Get schema (cached)
-        const schemaTable = getQuotedSchemaFieldsTableName(slug);
         const zodSchema = await getZodSchema(slug, async () => {
-          return (await db.find(schemaTable.slice(1, -1), {}, {  // Remove backticks for find()
-            orderBy: 'position',
-            order: 'ASC',
-          })) as unknown as SchemaField[];
+          return schemaRepository.findByAppSlug(slug) as unknown as Promise<SchemaField[]>;
         });
 
         // No schema yet — silently ok if no fields were defined
-        const fields = await db.find(schemaTable.slice(1, -1), {});  // Remove backticks for find()
-        if (fields.length === 0) {
+        const fieldsArray = await schemaRepository.findByAppSlug(slug);
+        if (fieldsArray.length === 0) {
           if (config.debugInbound) {
             logger.warn({ slug }, 'Inbound: no schema fields');
             return reply.status(400).send({ ok: false, error: 'No schema fields' });
@@ -203,40 +192,29 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
 
         // Idempotency key check
         const idempotencyKey = (request.headers['idempotency-key'] as string) || null;
-        const submissionsTable = getSubmissionsTableName(slug);  // Unquoted for ORM methods
-        const submissionsTableQuoted = getQuotedSubmissionsTableName(slug);  // Quoted for raw SQL
 
         if (idempotencyKey) {
-          const existing = await db.findOne(submissionsTable, { idempotency_key: idempotencyKey });
+          const existing = await submissionRepository.findByIdempotencyKey(slug, idempotencyKey);
           if (existing) {
-            if (config.debugInbound && idempotencyKey && existing) {
-              logger.info({ idempotencyKey, existingId: (existing as { id: string }).id }, 'Inbound: idempotency key hit');
+            if (config.debugInbound) {
+              logger.info({ idempotencyKey, existingId: existing.id }, 'Inbound: idempotency key hit');
               return reply
                 .status(409)
-                .send({ ok: false, error: 'Duplicate idempotency key', id: (existing as { id: string }).id });
+                .send({ ok: false, error: 'Duplicate idempotency key', id: existing.id });
             }
-            return reply.status(200).send({ ok: true, id: (existing as { id: string }).id });
+            return reply.status(200).send({ ok: true, id: existing.id });
           }
         }
 
         // Individual unique field checks — duplicates bump a counter
-        const fieldsArray = (await db.find(schemaTable.slice(1, -1), {})) as unknown as SchemaField[];  // Remove backticks for find()
-
-        for (const field of fieldsArray) {
+        for (const field of fieldsArray as unknown as SchemaField[]) {
           if (!field.unique || field.compound_key) continue;
           const value = validatedData[field.name];
           if (value === undefined) continue;
 
-          const hit = await db.exec(
-            `SELECT id FROM ${submissionsTableQuoted} WHERE json_extract(data, '$.${field.name}') = ? LIMIT 1`,
-            [String(value)]
-          );
-          const orig = ((hit as any)?.rows?.[0] as { id: string } | undefined);
-          if (orig) {
-            await db.exec(`UPDATE ${submissionsTableQuoted} SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?`, [
-              Math.floor(Date.now() / 1000),
-              orig.id,
-            ]);
+          const dupId = await submissionRepository.findUniqueFieldDuplicate(slug, field.name, String(value));
+          if (dupId) {
+            await submissionRepository.incrementDupCount(slug, dupId);
             if (config.debugInbound) {
               logger.info({ field: field.name, value }, 'Inbound: unique field duplicate');
               return reply.status(409).send({ ok: false, error: 'Duplicate unique field', field: field.name, value });
@@ -247,7 +225,7 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
 
         // Compound unique checks
         const compoundGroups: Record<string, SchemaField[]> = {};
-        for (const field of fieldsArray) {
+        for (const field of fieldsArray as unknown as SchemaField[]) {
           if (!field.compound_key) continue;
           if (!compoundGroups[field.compound_key]) compoundGroups[field.compound_key] = [];
           compoundGroups[field.compound_key].push(field);
@@ -255,15 +233,10 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
         for (const groupFields of Object.values(compoundGroups)) {
           const present = groupFields.filter((f) => validatedData[f.name] !== undefined);
           if (present.length === 0) continue;
-          const conditions = present.map((f) => `json_extract(data, '$.${f.name}') = ?`);
-          const params = present.map((f) => String(validatedData[f.name]));
-          const hit = await db.exec(`SELECT id FROM ${submissionsTableQuoted} WHERE ${conditions.join(' AND ')} LIMIT 1`, params);
-          const orig = ((hit as any)?.rows?.[0] as { id: string } | undefined);
-          if (orig) {
-            await db.exec(`UPDATE ${submissionsTableQuoted} SET dup_count = dup_count + 1, last_seen_at = ? WHERE id = ?`, [
-              Math.floor(Date.now() / 1000),
-              orig.id,
-            ]);
+          const conditions = present.map((f) => ({ field: f.name, value: String(validatedData[f.name]) }));
+          const dupId = await submissionRepository.findCompoundUniqueDuplicate(slug, conditions);
+          if (dupId) {
+            await submissionRepository.incrementDupCount(slug, dupId);
             if (config.debugInbound) {
               logger.info({ group: groupFields.map((f) => f.name), present }, 'Inbound: compound unique duplicate');
               return reply.status(409).send({
@@ -281,17 +254,17 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
         const id = randomUUID();
         const now = Math.floor(Date.now() / 1000);
 
-        const meta = JSON.stringify({
-          ua: request.headers['user-agent'] ?? null,
-          referrer: request.headers['referer'] || request.headers['referrer'] || null,
-        });
-
-        await db.insert(submissionsTable, {
+        await submissionRepository.insert(slug, {
           id,
           data: JSON.stringify(validatedData),
           idempotency_key: idempotencyKey,
           ip: request.ip,
-          meta,
+          meta: JSON.stringify({
+            ua: request.headers['user-agent'] ?? null,
+            referrer: request.headers['referer'] || request.headers['referrer'] || null,
+          }),
+          dup_count: 0,
+          last_seen_at: null,
           created_at: now,
         });
 
@@ -304,6 +277,6 @@ export async function registerInboundRoutes(server: FastifyInstance): Promise<vo
         logger.error({ err }, 'Unhandled error in submission handler');
         reply.status(500).send({ ok: false, error: 'Internal server error' });
       }
-    }
+    },
   );
 }

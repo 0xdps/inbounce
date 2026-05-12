@@ -1,38 +1,44 @@
-import { Database } from 'sqlite-hub-client';
-import connect from 'sqlite-hub-client';
+import { MesahubClient, parseMesahubUrl } from '@mesahub/client';
+import type { DatabaseHandle } from '@mesahub/client';
 import config from './config.js';
 
-const db: Database = connect({
-  url: config.sqliteHubUrl,
-  token: config.sqliteHubServiceSecret,
-  db: config.sqliteHubDb,
-});
+const { apiUrl, apiKey, dbName, routePrefix } = parseMesahubUrl(config.mesahubUrl);
+
+const client = new MesahubClient({ apiUrl, apiKey, routePrefix });
 
 /**
- * Create core tables on boot. Safe to run repeatedly (IF NOT EXISTS).
- * 
- * Only creates the global 'apps' table.
- * Schema and submissions tables are per-app and created on-demand (see core/tables.ts).
+ * Shared DatabaseHandle — used by all repository implementations.
+ * The underlying HTTP client pools connections automatically.
+ */
+const db: DatabaseHandle = client.db(dbName);
+
+/**
+ * Create the global `apps` table on first boot.
+ * Safe to run repeatedly (IF NOT EXISTS).
+ *
+ * Per-app tables (schema fields + submissions) are created on-demand
+ * via ITableManager.ensureAppTables().
  */
 export async function initializeSchema(): Promise<void> {
-  await db.createTable(
-    'apps',
-    [
-      { name: 'id', type: 'TEXT', primaryKey: true },
-      { name: 'slug', type: 'TEXT', notNull: true, unique: true }, // New: immutable public identifier
-      { name: 'name', type: 'TEXT', notNull: true },
-      { name: 'description', type: 'TEXT' },
-      { name: 'api_key', type: 'TEXT', notNull: true, unique: true },
-      { name: 'allowed_origins', type: 'TEXT', notNull: true, default: "'[]'" },
-      { name: 'created_at', type: 'INTEGER', notNull: true },
-      { name: 'updated_at', type: 'INTEGER', notNull: true },
-    ],
-    { ifNotExists: true }
-  );
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS "apps" (
+      "id"              TEXT PRIMARY KEY,
+      "slug"            TEXT NOT NULL UNIQUE,
+      "name"            TEXT NOT NULL,
+      "description"     TEXT,
+      "api_key"         TEXT NOT NULL UNIQUE,
+      "allowed_origins" TEXT NOT NULL DEFAULT '[]',
+      "created_at"      INTEGER NOT NULL,
+      "updated_at"      INTEGER NOT NULL
+    )
+  `);
 
-  // Indexes
-  await db.createIndex('idx_apps_slug', 'apps', ['slug'], { ifNotExists: true });
-  await db.createIndex('idx_apps_api_key', 'apps', ['api_key'], { unique: true, ifNotExists: true });
+  await db.exec(
+    `CREATE INDEX IF NOT EXISTS "idx_apps_slug" ON "apps" ("slug")`,
+  );
+  await db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "idx_apps_api_key" ON "apps" ("api_key")`,
+  );
 }
 
 export default db;

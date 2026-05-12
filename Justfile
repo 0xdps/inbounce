@@ -1,117 +1,53 @@
-# Inbounce Development & Production Task Runner
+# Inbounce — development & production task runner
+# Run `just` to list available recipes.
 
 COMPOSE_FILE := "docker-compose.yaml"
-CADDY_INTERNAL_PORT := "8080"
-PORTLESS_ALIAS := "inbounce"
-PORTLESS_PROXY_PORT := "1355"
-
-DEV_CADDY_SERVICE := "caddy"
+DEV_PORT     := "8080"
 
 default:
     @just --list
 
-# Validate local prerequisites
-doctor:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    command -v docker >/dev/null 2>&1 || { echo "❌ docker is required"; exit 1; }
-    docker info >/dev/null 2>&1 || { echo "❌ Docker daemon is not running"; exit 1; }
-    command -v node >/dev/null 2>&1 || { echo "❌ node is required"; exit 1; }
-    command -v npm >/dev/null 2>&1 || { echo "❌ npm is required"; exit 1; }
-    command -v just >/dev/null 2>&1 || { echo "❌ just is required"; exit 1; }
-    [ -f .env ] || { echo "❌ .env missing. Run: just env-setup"; exit 1; }
-    npx portless --help >/dev/null 2>&1 || { echo "❌ Portless not available via npx"; exit 1; }
-    if command -v docker-compose >/dev/null 2>&1; then
-        docker-compose -f {{COMPOSE_FILE}} --profile dev config >/dev/null
-    else
-        docker compose -f {{COMPOSE_FILE}} --profile dev config >/dev/null
-    fi
-    echo "✅ doctor: environment is ready"
-
 # ============================================================================
-# DEVELOPMENT RECIPES
+# DEVELOPMENT
 # ============================================================================
 
 # Start development environment (Caddy + Backend + Frontend, hot reload)
 dev:
     #!/usr/bin/env bash
     set -euo pipefail
-
-    [ -f .env ] || { echo "❌ .env missing. Run: just env-setup"; exit 1; }
-    if command -v docker-compose >/dev/null 2>&1; then
-        COMPOSE="docker-compose"
-    else
-        COMPOSE="docker compose"
-    fi
-
-    echo "🚀 Starting Inbounce Development Environment"
+    [ -f .env.local ] || { echo "❌ .env.local missing — copy .env.example and fill in values"; exit 1; }
+    echo "🚀 Starting Inbounce dev environment..."
+    docker compose -f {{COMPOSE_FILE}} --profile dev up -d --build --force-recreate caddy
     echo ""
-
-    echo "Starting Portless proxy..."
-    npx portless proxy start >/dev/null 2>&1 || true
-
-    echo "Starting containers..."
-    $COMPOSE -f {{COMPOSE_FILE}} --profile dev up -d --build --force-recreate {{DEV_CADDY_SERVICE}}
-
-    tries=0
-    max_tries=90
-    PORT=""
-    while [ $tries -lt $max_tries ]; do
-        PORT=$($COMPOSE -f {{COMPOSE_FILE}} --profile dev port {{DEV_CADDY_SERVICE}} {{CADDY_INTERNAL_PORT}} 2>/dev/null | awk -F: '{print $NF}')
-        if [ -n "$PORT" ]; then break; fi
-        tries=$((tries + 1))
-        sleep 1
-    done
-
-    if [ -z "$PORT" ]; then
-        echo "❌ Could not detect Caddy port. Check container status:"
-        $COMPOSE -f {{COMPOSE_FILE}} --profile dev ps
-        exit 1
-    fi
-
+    echo "✅ Dev environment started → http://localhost:{{DEV_PORT}}"
     echo ""
-    echo "✅ Services started!"
-    echo "  → http://localhost:$PORT"
-    echo ""
+    echo "Streaming logs (Ctrl+C to stop)..."
+    docker compose -f {{COMPOSE_FILE}} --profile dev logs -f backend frontend
 
-    npx portless alias {{PORTLESS_ALIAS}} $PORT >/dev/null 2>&1 || true
-    echo "✅ Portless alias ready:"
-    echo "  → http://{{PORTLESS_ALIAS}}.localhost:{{PORTLESS_PROXY_PORT}}"
-    echo ""
+# Stop all dev containers
+down:
+    docker compose -f {{COMPOSE_FILE}} --profile dev down --remove-orphans
 
-    health_tries=0
-    health_max=120
-    while [ $health_tries -lt $health_max ]; do
-        if curl -sf "http://localhost:$PORT/health" >/dev/null 2>&1; then
-            echo "✅ Service is healthy"
-            break
-        fi
-        health_tries=$((health_tries + 1))
-        sleep 1
-    done
-    if [ $health_tries -ge $health_max ]; then
-        echo "⚠️  Service did not become healthy within timeout"
-    fi
+# Tear down and rebuild dev environment from scratch
+reset:
+    docker compose -f {{COMPOSE_FILE}} --profile dev down -v
+    docker compose -f {{COMPOSE_FILE}} --profile dev up --build
 
-    cleanup() {
-        $COMPOSE -f {{COMPOSE_FILE}} --profile dev down --remove-orphans >/dev/null 2>&1 || true
-        npx portless alias --remove {{PORTLESS_ALIAS}} >/dev/null 2>&1 || true
-    }
-    trap cleanup EXIT INT TERM
+# Stream all logs
+logs:
+    docker compose -f {{COMPOSE_FILE}} --profile dev logs -f backend frontend
 
-    echo ""
-    echo "Streaming logs (backend + frontend). Ctrl+C to stop."
-    $COMPOSE -f {{COMPOSE_FILE}} --profile dev logs -f backend frontend
+# Stream backend logs
+logs-be:
+    docker compose -f {{COMPOSE_FILE}} --profile dev logs -f backend
 
-# Start development in background (silent)
-dev-bg:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if command -v docker-compose >/dev/null 2>&1; then
-        docker-compose -f {{COMPOSE_FILE}} --profile dev up --build -d
-    else
-        docker compose -f {{COMPOSE_FILE}} --profile dev up --build -d
-    fi
+# Stream frontend logs
+logs-fe:
+    docker compose -f {{COMPOSE_FILE}} --profile dev logs -f frontend
+
+# Stream Caddy logs
+logs-caddy:
+    docker compose -f {{COMPOSE_FILE}} --profile dev logs -f caddy
 
 # Start locally without Docker (requires Node installed)
 dev-local:
@@ -132,12 +68,11 @@ seed:
 # Generate fake submissions using API key
 # Usage: just generate-submissions <api_key> [count]
 # Example: just generate-submissions abc123def456 50
-# Note: Uses portless alias by default. For direct access, pass custom endpoint as 3rd arg.
-generate-submissions api_key count='20' endpoint='http://inbounce.localhost:1355/api/submit':
+generate-submissions api_key count='20' endpoint='http://localhost:{{DEV_PORT}}/api/submit':
     node scripts/generate-submissions.mjs {{api_key}} {{count}} {{endpoint}}
 
 # ============================================================================
-# RAILWAY DEPLOY RECIPES
+# RAILWAY DEPLOY
 # ============================================================================
 
 # Deploy via railway-deploy declarative tool
@@ -155,13 +90,7 @@ deploy-config deploy_env project_id:
 
 # Deploy to Railway (requires: railway CLI authenticated + project linked)
 deploy MESSAGE='deploy':
-    #!/usr/bin/env bash
-    set -euo pipefail
-    command -v railway >/dev/null 2>&1 || { echo "❌ railway CLI not installed. Run: npm i -g @railway/cli"; exit 1; }
-    railway whoami --json >/dev/null 2>&1 || { echo "❌ Not authenticated. Run: railway login"; exit 1; }
-    echo "🚀 Deploying to Railway..."
     railway up --detach -m "{{MESSAGE}}"
-    echo "✅ Deploy triggered. Watch logs with: just railway-logs"
 
 # Stream live Railway logs
 railway-logs:
@@ -175,75 +104,17 @@ railway-status:
 railway-open:
     railway open
 
-# Stop all dev containers
-down:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if command -v docker-compose >/dev/null 2>&1; then
-        docker-compose -f {{COMPOSE_FILE}} --profile dev down
-    else
-        docker compose -f {{COMPOSE_FILE}} --profile dev down
-    fi
-    npx portless alias --remove {{PORTLESS_ALIAS}} >/dev/null 2>&1 || true
-
-# Stream all logs
-logs:
-    #!/usr/bin/env bash
-    if command -v docker-compose >/dev/null 2>&1; then
-        docker-compose -f {{COMPOSE_FILE}} --profile dev logs -f backend frontend
-    else
-        docker compose -f {{COMPOSE_FILE}} --profile dev logs -f backend frontend
-    fi
-
-# Stream backend logs only
-logs-be:
-    #!/usr/bin/env bash
-    if command -v docker-compose >/dev/null 2>&1; then
-        docker-compose -f {{COMPOSE_FILE}} --profile dev logs -f backend
-    else
-        docker compose -f {{COMPOSE_FILE}} --profile dev logs -f backend
-    fi
-
-# Stream frontend logs only
-logs-fe:
-    #!/usr/bin/env bash
-    if command -v docker-compose >/dev/null 2>&1; then
-        docker-compose -f {{COMPOSE_FILE}} --profile dev logs -f frontend
-    else
-        docker compose -f {{COMPOSE_FILE}} --profile dev logs -f frontend
-    fi
-
-# Stream Caddy logs only
-logs-caddy:
-    #!/usr/bin/env bash
-    if command -v docker-compose >/dev/null 2>&1; then
-        docker-compose -f {{COMPOSE_FILE}} --profile dev logs -f caddy
-    else
-        docker compose -f {{COMPOSE_FILE}} --profile dev logs -f caddy
-    fi
-
-# Tear down and rebuild dev environment from scratch
-reset:
-    #!/usr/bin/env bash
-    if command -v docker-compose >/dev/null 2>&1; then
-        docker-compose -f {{COMPOSE_FILE}} --profile dev down -v
-        docker-compose -f {{COMPOSE_FILE}} --profile dev up --build
-    else
-        docker compose -f {{COMPOSE_FILE}} --profile dev down -v
-        docker compose -f {{COMPOSE_FILE}} --profile dev up --build
-    fi
-
 # ============================================================================
-# BUILD RECIPES
+# BUILD
 # ============================================================================
-
-# Build frontend
-build-fe:
-    npm --prefix services/frontend run build
 
 # Build backend (TypeScript compilation)
 build-be:
     npm --prefix services/backend run build
+
+# Build frontend
+build-fe:
+    npm --prefix services/frontend run build
 
 # Build both
 build:
@@ -274,21 +145,11 @@ dev-landing:
 build-landing:
     npm --prefix services/landing run build
 
-# Install npm dependencies for backend and frontend
+# Install npm dependencies for all services
 install:
     npm --prefix services/backend install
     npm --prefix services/frontend install
     npm --prefix services/landing install
-
-# Copy .env.example → .env (if .env does not exist)
-env-setup:
-    #!/usr/bin/env bash
-    if [ ! -f .env ]; then
-        cp .env.example .env
-        echo "📝 Created .env — edit it with your actual values"
-    else
-        echo "✓ .env already exists"
-    fi
 
 # Remove all node_modules
 clean:

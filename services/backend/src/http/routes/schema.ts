@@ -1,9 +1,9 @@
 import { randomUUID } from 'crypto';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import db from '../../core/db.js';
 import { authHook } from '../middleware/auth.js';
-import { getSchemaFieldsTableName } from '../../core/slug.js';
 import { invalidateSchemaCacheForApp } from '../../core/caches.js';
+import { appRepository, schemaRepository } from '../../repositories/index.js';
+import type { SchemaFieldRow } from '../../repositories/interfaces.js';
 
 const VALID_TYPES = new Set(['string', 'email', 'number', 'boolean', 'url', 'date']);
 const RESERVED_NAMES = new Set(['id', 'data', 'idempotency_key', 'ip', 'created_at', 'updated_at']);
@@ -48,28 +48,14 @@ export async function registerSchemaRoutes(server: FastifyInstance): Promise<voi
     '/api/apps/:slug/schema',
     { preHandler: [authHook] },
     async (request: FastifyRequest<{ Params: { slug: string } }>, reply: FastifyReply) => {
-      const app = await db.findOne('apps', { slug: (request.params as any).slug });
+      const app = await appRepository.findBySlug((request.params as any).slug);
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
-      const schemaTable = getSchemaFieldsTableName((request.params as any).slug);
-      const fields = (await db.find(
-        schemaTable,
-        {},
-        {
-          orderBy: 'position',
-          order: 'ASC',
-        }
-      )) as unknown as any[];
-      
+      const fields = await schemaRepository.findByAppSlug(app.slug);
+
       // Transform SQLite integers to booleans for required/unique
-      const transformed = fields.map(f => ({
-        ...f,
-        required: !!f.required,
-        unique: !!f.unique,
-      }));
-      
-      return transformed;
-    }
+      return fields.map((f) => ({ ...f, required: !!f.required, unique: !!f.unique }));
+    },
   );
 
   // PUT /api/apps/:slug/schema
@@ -77,19 +63,15 @@ export async function registerSchemaRoutes(server: FastifyInstance): Promise<voi
     '/api/apps/:slug/schema',
     { preHandler: [authHook] },
     async (request: FastifyRequest<{ Params: { slug: string }; Body: { fields: FieldInput[] } }>, reply: FastifyReply) => {
-      const app = await db.findOne('apps', { slug: (request.params as any).slug });
+      const app = await appRepository.findBySlug((request.params as any).slug);
       if (!app) return reply.status(404).send({ error: 'App not found' });
 
       const { fields } = (request.body as any) || {};
       const error = validateFields(fields);
       if (error) return reply.status(400).send({ error });
 
-      const schemaTable = getSchemaFieldsTableName((request.params as any).slug);
-
-      // Delete existing fields and replace
-      await db.delete(schemaTable, {});
-
-      const rows = (fields as FieldInput[]).map((f, i) => ({
+      const now = Math.floor(Date.now() / 1000);
+      const rows: SchemaFieldRow[] = (fields as FieldInput[]).map((f, i) => ({
         id: randomUUID(),
         name: f.name,
         type: f.type,
@@ -97,25 +79,17 @@ export async function registerSchemaRoutes(server: FastifyInstance): Promise<voi
         unique: f.unique ? 1 : 0,
         position: f.position ?? i,
         compound_key: f.compound_key && FIELD_NAME_RE.test(f.compound_key) ? f.compound_key : null,
-        created_at: Math.floor(Date.now() / 1000),
-        updated_at: Math.floor(Date.now() / 1000),
+        created_at: now,
+        updated_at: now,
       }));
 
-      if (rows.length > 0) {
-        await db.insertMany(schemaTable, rows);
-      }
+      await schemaRepository.replaceAll(app.slug, rows);
 
       // Invalidate schema cache immediately
-      invalidateSchemaCacheForApp((request.params as any).slug);
+      invalidateSchemaCacheForApp(app.slug);
 
       // Transform response to match frontend expectations (booleans instead of 0/1)
-      const transformed = rows.map(r => ({
-        ...r,
-        required: !!r.required,
-        unique: !!r.unique,
-      }));
-
-      return transformed;
-    }
+      return rows.map((r) => ({ ...r, required: !!r.required, unique: !!r.unique }));
+    },
   );
 }

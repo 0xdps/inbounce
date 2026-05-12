@@ -37,9 +37,7 @@ services:
       common:
         - ADMIN_KEY
         - SESSION_SECRET
-        - SQLITE_HUB_URL
-        - SQLITE_HUB_DB
-        - SQLITE_HUB_SERVICE_SECRET
+        - MESAHUB_URL
 
 # ── Auto-generated secrets ───────────────────────────────────────────────────
 # Generated once on first deploy and written to the env file.
@@ -55,9 +53,7 @@ secrets:
 required_vars:
   - ADMIN_KEY
   - SESSION_SECRET
-  - SQLITE_HUB_URL
-  - SQLITE_HUB_DB
-  - SQLITE_HUB_SERVICE_SECRET
+  - MESAHUB_URL
 
 # ── Soft-required variables ───────────────────────────────────────────────────
 # Deploy continues but logs a warning – affected features won't work.
@@ -68,6 +64,4 @@ soft_vars: []
 # ADMIN_KEY and SESSION_SECRET are auto-generated (see secrets above).
 # Fill these in before first deploy:
 env_template:
-  SQLITE_HUB_URL: "https://your-sqlite-hub.up.railway.app"
-  SQLITE_HUB_DB: "inbounce"
-  SQLITE_HUB_SERVICE_SECRET: "replace-me"
+  MESAHUB_URL: "mh://your_api_key@api.mesahub.app/your_db_name"

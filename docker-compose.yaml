@@ -1,7 +1,31 @@
 volumes:
   backend_node_modules:
+  mesahub_data:
+  app_data:
 
 services:
+  mesahub:
+    container_name: inbounce-mesahub
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: mesahub
+    environment:
+      PORT: 3002
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-dev-admin-token}
+      SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-32chars-min}
+      FILE_TOKEN_SIGNING_SECRET: ${SESSION_SECRET:-dev-session-secret-32chars-min}
+      DATA_PATH: /data
+    volumes:
+      - mesahub_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3002/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
   backend:
     container_name: inbounce-backend
     profiles: ["dev"]
@@ -12,15 +36,19 @@ services:
     expose:
       - "3000"
     env_file:
-      - .env
+      - .env.local
     environment:
       NODE_ENV: development
       PORT: 3000
+      MESAHUB_URL: mh://${ADMIN_TOKEN:-dev-admin-token}@mesahub:3002/inbounce
     volumes:
       - ./services/backend:/app/services/backend
       - ./tsconfig.json:/app/tsconfig.json:ro
       - backend_node_modules:/app/services/backend/node_modules
     restart: unless-stopped
+    depends_on:
+      mesahub:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 10s
@@ -58,7 +86,7 @@ services:
     profiles: ["dev"]
     image: caddy:2-alpine
     ports:
-      - "${CADDY_INTERNAL_PORT:-8080}"
+      - "${DEV_PORT:-8080}:${CADDY_INTERNAL_PORT:-8080}"
     command:
       - /bin/sh
       - -ec
@@ -96,3 +124,28 @@ services:
         condition: service_healthy
       frontend:
         condition: service_started
+
+  app:
+    container_name: inbounce-app
+    profiles: ["prod"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        MESAHUB_CORE_VERSION: trunk
+    ports:
+      - "${PORT:-80}:80"
+    env_file:
+      - .env.prod
+    environment:
+      NODE_ENV: production
+    volumes:
+      - app_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

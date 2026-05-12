@@ -9,9 +9,7 @@ dotenv.config({ path: envPath, override: true });
 interface ConfigType {
   adminKey: string;
   sessionSecret: string;
-  sqliteHubUrl: string;
-  sqliteHubDb: string;
-  sqliteHubServiceSecret: string;
+  mesahubUrl: string;
   port: number;
   logLevel: string;
   nodeEnv: string;
@@ -21,9 +19,7 @@ interface ConfigType {
 class Config implements ConfigType {
   adminKey: string;
   sessionSecret: string;
-  sqliteHubUrl: string;
-  sqliteHubDb: string;
-  sqliteHubServiceSecret: string;
+  mesahubUrl: string;
   port: number;
   logLevel: string;
   nodeEnv: string;
@@ -37,9 +33,7 @@ class Config implements ConfigType {
       throw new Error('SESSION_SECRET must be at least 32 characters');
     }
 
-    this.sqliteHubUrl = this._requireEnv('SQLITE_HUB_URL');
-    this.sqliteHubDb = this._requireEnv('SQLITE_HUB_DB');
-    this.sqliteHubServiceSecret = this._requireEnv('SQLITE_HUB_SERVICE_SECRET');
+    this.mesahubUrl = this._requireEnv('MESAHUB_URL');
 
     this.port = parseInt(process.env.PORT || '3000', 10);
     this.logLevel = process.env.LOG_LEVEL || 'info';
