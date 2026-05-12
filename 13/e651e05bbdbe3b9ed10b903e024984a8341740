@@ -1,0 +1,102 @@
+start.sh
+  s_d8e431881d67ae::t_1ac4c970209af4 11-70
+.env.example
+  h_d60f3499e5a1c3 15
+  h_7a2f4c8f0473b8 4-12
+services/backend/src/http/routes/inbound.ts
+  7758f5c4ed39fa16 11,37,40-43,164,172-173,197,199-200,203,205,210,215-217,228,236-239,257,262-267,280
+  h_d60f3499e5a1c3 141,168
+services/backend/src/repositories/mesahub/schema.repository.ts
+  h_d60f3499e5a1c3 1-32
+services/backend/src/repositories/index.ts
+  h_d60f3499e5a1c3 1-17
+services/backend/src/core/db.ts
+  7758f5c4ed39fa16 1-2,5-13,16-20,23-34,36-41
+services/backend/src/repositories/mesahub/app.repository.ts
+  h_d60f3499e5a1c3 1-41
+.github/workflows/docker-publish.yml
+  h_7a2f4c8f0473b8 1-91
+services/backend/src/repositories/interfaces.ts
+  h_d60f3499e5a1c3 1-150
+services/backend/src/http/routes/schema.ts
+  7758f5c4ed39fa16 5-6,51,54-55,57-58,66,73-74,82-83,86,89,92-93
+services/backend/src/repositories/mesahub/submission.repository.ts
+  h_d60f3499e5a1c3 1-202
+docker-compose.yaml
+  s_d8e431881d67ae::t_eec7cf86f1b6d9 3,7-12,14-22,24-28,43,49-51
+  7758f5c4ed39fa16 39,127-134,137,139-142,145-146,148-150
+  6e564a790702aafc 89
+  s_d8e431881d67ae::t_10ae385ece52ed 135-136,138,143-144,147,151
+  s_d8e431881d67ae::t_d5c9ca220f0ef9 4
+  s_d8e431881d67ae::t_f7f7dd9bff75bc 13,23
+inbounce.deploy.yml
+  7758f5c4ed39fa16 40,56,67
+services/backend/src/http/routes/submissions.ts
+  h_d60f3499e5a1c3 33,36,74,82,85-86,88-91,102,110,113,116,118,126,134,136
+  7758f5c4ed39fa16 3,8,45,48,57-58,60
+services/backend/src/core/tables.ts
+  7758f5c4ed39fa16 1,21,26-38,40-42,45-56,58-60,62-64,74
+Dockerfile
+  s_d8e431881d67ae::t_d38d8516700583 67,72,76-79
+  s_d8e431881d67ae::t_cc1684832de97e 1-12,24
+  s_d8e431881d67ae::t_d3140f30724432 13-23
+services/backend/src/repositories/mesahub/table-manager.ts
+  h_d60f3499e5a1c3 1-66
+.github/workflows/check.yml
+  h_7a2f4c8f0473b8 1-41
+services/backend/src/core/config.ts
+  7758f5c4ed39fa16 12,22,36
+services/backend/src/http/routes/apps.ts
+  7758f5c4ed39fa16 5,7-8,31,33-36,58,63,75,88,96,99,101,109,113,118-120,129,133,141,144-145,152,160,165,170
+services/backend/package.json
+  s_d8e431881d67ae::t_685aa1673b7bc9 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "13e651e05bbdbe3b9ed10b903e024984a8341740",
+  "prompts": {
+    "6e564a790702aafc": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "896e2dad-0cf6-423f-9982-62f6b10c245b",
+        "model": "unknown"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "total_additions": 55,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "7758f5c4ed39fa16": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "b4942b5f-bcad-42ca-ac53-d18f71751917",
+        "model": "unknown"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "total_additions": 414,
+      "total_deletions": 183,
+      "accepted_lines": 404,
+      "overriden_lines": 2
+    }
+  },
+  "humans": {
+    "h_7a2f4c8f0473b8": {
+      "author": "Devendra Pratap Singh <dps.manit@gmail.com>"
+    },
+    "h_d60f3499e5a1c3": {
+      "author": "Devendra Pratap Singh"
+    }
+  },
+  "sessions": {
+    "s_d8e431881d67ae": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "6363ceb0-89b8-42e3-a961-6475dc01cc7a",
+        "model": "unknown"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>"
+    }
+  }
+}
